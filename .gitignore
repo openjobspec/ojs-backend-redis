@@ -1,0 +1,6 @@
+# Build artifacts
+bin/
+ojs-server
+
+# Redis
+dump.rdb
