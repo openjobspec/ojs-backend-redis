@@ -1,0 +1,57 @@
+name: Conformance
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  conformance:
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: ojs-backend-redis
+
+      - uses: actions/checkout@v4
+        with:
+          repository: openjobspec/ojs-conformance
+          path: ojs-conformance
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Build server
+        working-directory: ojs-backend-redis
+        run: go build -o bin/ojs-server ./cmd/ojs-server
+
+      - name: Build conformance runner
+        working-directory: ojs-conformance
+        run: go build -o bin/ojs-conformance ./runner/http/
+
+      - name: Start server
+        working-directory: ojs-backend-redis
+        run: |
+          REDIS_URL=redis://localhost:6379 ./bin/ojs-server &
+          sleep 2
+          curl -sf http://localhost:8080/ojs/v1/health
+
+      - name: Run conformance tests
+        run: |
+          ojs-conformance/bin/ojs-conformance \
+            -url http://localhost:8080 \
+            -suites ojs-conformance/suites \
+            -redis redis://localhost:6379
