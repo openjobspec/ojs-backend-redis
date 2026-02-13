@@ -17,6 +17,7 @@ func NewRouter(backend core.Backend) http.Handler {
 	// Middleware
 	r.Use(middleware.Recoverer)
 	r.Use(api.OJSHeaders)
+	r.Use(api.LimitRequestBody)
 	r.Use(api.ValidateContentType)
 
 	// Create handlers

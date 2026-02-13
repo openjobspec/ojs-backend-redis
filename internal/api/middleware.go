@@ -7,6 +7,9 @@ import (
 	"github.com/openjobspec/ojs-backend-redis/internal/core"
 )
 
+// maxRequestBodySize is the maximum allowed request body size (1 MB).
+const maxRequestBodySize = 1 << 20
+
 // OJSHeaders middleware adds required OJS response headers.
 func OJSHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -43,6 +46,16 @@ func ValidateContentType(next http.Handler) http.Handler {
 					return
 				}
 			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// LimitRequestBody middleware limits the size of request bodies to prevent DoS.
+func LimitRequestBody(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost || r.Method == http.MethodPut || r.Method == http.MethodPatch {
+			r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodySize)
 		}
 		next.ServeHTTP(w, r)
 	})
