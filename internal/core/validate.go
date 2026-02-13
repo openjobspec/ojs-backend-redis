@@ -6,6 +6,11 @@ import (
 	"regexp"
 )
 
+const (
+	maxTypeLength  = 255
+	maxQueueLength = 128
+)
+
 var (
 	typePattern  = regexp.MustCompile(`^[a-z][a-z0-9_\-]*(\.[a-z][a-z0-9_\-]*)*$`)
 	queuePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9\-\.]*$`)
@@ -19,6 +24,19 @@ func ValidateEnqueueRequest(req *EnqueueRequest) *OJSError {
 			"field":      "type",
 			"validation": "required",
 		})
+	}
+
+	// Type length validation
+	if len(req.Type) > maxTypeLength {
+		return NewInvalidRequestError(
+			fmt.Sprintf("The 'type' field must not exceed %d characters. Got: %d", maxTypeLength, len(req.Type)),
+			map[string]any{
+				"field":      "type",
+				"validation": "max_length",
+				"max":        maxTypeLength,
+				"received":   len(req.Type),
+			},
+		)
 	}
 
 	// Type format validation
@@ -87,6 +105,19 @@ func ValidateEnqueueRequest(req *EnqueueRequest) *OJSError {
 }
 
 func validateOptions(opts *EnqueueOptions) *OJSError {
+	// Queue name length validation
+	if len(opts.Queue) > maxQueueLength {
+		return NewInvalidRequestError(
+			fmt.Sprintf("The 'queue' field must not exceed %d characters. Got: %d", maxQueueLength, len(opts.Queue)),
+			map[string]any{
+				"field":      "queue",
+				"validation": "max_length",
+				"max":        maxQueueLength,
+				"received":   len(opts.Queue),
+			},
+		)
+	}
+
 	// Queue name validation
 	if opts.Queue != "" && !queuePattern.MatchString(opts.Queue) {
 		return NewInvalidRequestError(

@@ -2,6 +2,7 @@ package core
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -218,6 +219,24 @@ func TestValidateEnqueueRequest(t *testing.T) {
 				Args: json.RawMessage(`["x"]`),
 			},
 			wantErr: false,
+		},
+		{
+			name: "type at max length 255 is valid",
+			req: &EnqueueRequest{
+				Type: strings.Repeat("a", 255),
+				Args: json.RawMessage(`["x"]`),
+			},
+			wantErr: false,
+		},
+		{
+			name: "type exceeding max length 255 returns error",
+			req: &EnqueueRequest{
+				Type: strings.Repeat("a", 256),
+				Args: json.RawMessage(`["x"]`),
+			},
+			wantErr:   true,
+			wantCode:  ErrCodeInvalidRequest,
+			wantField: "type",
 		},
 
 		// -----------------------------------------------------------
@@ -470,6 +489,30 @@ func TestValidateEnqueueRequest(t *testing.T) {
 				Args: json.RawMessage(`["x"]`),
 				Options: &EnqueueOptions{
 					Queue: "my_queue",
+				},
+			},
+			wantErr:   true,
+			wantCode:  ErrCodeInvalidRequest,
+			wantField: "queue",
+		},
+		{
+			name: "queue name at max length 128 is valid",
+			req: &EnqueueRequest{
+				Type: "test",
+				Args: json.RawMessage(`["x"]`),
+				Options: &EnqueueOptions{
+					Queue: strings.Repeat("a", 128),
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "queue name exceeding max length 128 returns error",
+			req: &EnqueueRequest{
+				Type: "test",
+				Args: json.RawMessage(`["x"]`),
+				Options: &EnqueueOptions{
+					Queue: strings.Repeat("a", 129),
 				},
 			},
 			wantErr:   true,
@@ -1009,10 +1052,8 @@ func TestValidateEnqueueRequest(t *testing.T) {
 						t.Errorf("error details field = %q, want %q", field, tt.wantField)
 					}
 				}
-			} else {
-				if err != nil {
-					t.Errorf("ValidateEnqueueRequest() returned unexpected error: %v", err)
-				}
+			} else if err != nil {
+				t.Errorf("ValidateEnqueueRequest() returned unexpected error: %v", err)
 			}
 		})
 	}
