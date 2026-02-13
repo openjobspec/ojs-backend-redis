@@ -58,20 +58,8 @@ type Job struct {
 	UnknownFields map[string]json.RawMessage `json:"-"`
 }
 
-// Known field names for Job
-var knownJobFields = map[string]bool{
-	"id": true, "type": true, "state": true, "queue": true,
-	"args": true, "meta": true, "priority": true, "attempt": true,
-	"max_attempts": true, "timeout_ms": true, "created_at": true,
-	"enqueued_at": true, "started_at": true, "completed_at": true,
-	"cancelled_at": true, "scheduled_at": true, "result": true,
-	"error": true, "errors": true, "tags": true, "retry": true, "unique": true,
-	"specversion": true, "options": true, "schema": true,
-	"expires_at": true, "retry_delay_ms": true,
-}
-
 // MarshalJSON implements custom JSON marshaling to include unknown fields.
-func (j Job) MarshalJSON() ([]byte, error) {
+func (j *Job) MarshalJSON() ([]byte, error) {
 	m := make(map[string]any)
 
 	m["id"] = j.ID
