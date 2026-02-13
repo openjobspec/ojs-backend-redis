@@ -22,15 +22,30 @@ func (h *SystemHandler) Manifest(w http.ResponseWriter, r *http.Request) {
 		"specversion": core.OJSVersion,
 		"implementation": map[string]any{
 			"name":    "ojs-backend-redis",
-			"version": "0.1.0",
+			"version": core.OJSVersion,
 			"backend": "redis",
 		},
-		"levels": []int{0, 1, 2, 3, 4},
-		"capabilities": []string{
-			"push", "fetch", "ack", "fail", "cancel", "info",
-			"heartbeat", "dead-letter", "retry", "cron",
-			"scheduled", "workflows", "batch", "priority",
-			"unique", "queue-pause", "queue-stats",
+		"conformance_level": 4,
+		"protocols":         []string{"http"},
+		"backend":           "redis",
+		"capabilities": map[string]any{
+			"batch_enqueue":     true,
+			"cron_jobs":         true,
+			"dead_letter":       true,
+			"delayed_jobs":      true,
+			"job_ttl":           true,
+			"priority_queues":   true,
+			"rate_limiting":     false,
+			"schema_validation": true,
+			"unique_jobs":       true,
+			"workflows":         true,
+			"pause_resume":      true,
+		},
+		"extensions": map[string]any{
+			"official": []map[string]any{
+				{"name": "admin-api", "uri": "urn:ojs:ext:admin-api", "version": "1.0.0"},
+				{"name": "dead-letter", "uri": "urn:ojs:ext:dead-letter", "version": "1.0.0"},
+			},
 		},
 	})
 }

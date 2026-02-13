@@ -134,7 +134,7 @@ func requestToJob(req *core.EnqueueRequest) *core.Job {
 		if req.Options.RateLimit != nil {
 			job.RateLimit = req.Options.RateLimit
 		}
-		if req.Options.Metadata != nil && len(req.Options.Metadata) > 0 {
+		if len(req.Options.Metadata) > 0 {
 			job.Meta = req.Options.Metadata
 		}
 		if req.Options.VisibilityTimeoutMs != nil {
