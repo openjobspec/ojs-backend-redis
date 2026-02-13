@@ -37,7 +37,7 @@ func (h *DeadLetterHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	jobs, total, err := h.backend.ListDeadLetter(r.Context(), limit, offset)
 	if err != nil {
-		WriteError(w, http.StatusInternalServerError, core.NewInternalError(err.Error()))
+		HandleError(w, err)
 		return
 	}
 
@@ -58,13 +58,7 @@ func (h *DeadLetterHandler) Retry(w http.ResponseWriter, r *http.Request) {
 
 	job, err := h.backend.RetryDeadLetter(r.Context(), id)
 	if err != nil {
-		if ojsErr, ok := err.(*core.OJSError); ok {
-			if ojsErr.Code == core.ErrCodeNotFound {
-				WriteError(w, http.StatusNotFound, ojsErr)
-				return
-			}
-		}
-		WriteError(w, http.StatusInternalServerError, core.NewInternalError(err.Error()))
+		HandleError(w, err)
 		return
 	}
 
@@ -77,13 +71,7 @@ func (h *DeadLetterHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	err := h.backend.DeleteDeadLetter(r.Context(), id)
 	if err != nil {
-		if ojsErr, ok := err.(*core.OJSError); ok {
-			if ojsErr.Code == core.ErrCodeNotFound {
-				WriteError(w, http.StatusNotFound, ojsErr)
-				return
-			}
-		}
-		WriteError(w, http.StatusInternalServerError, core.NewInternalError(err.Error()))
+		HandleError(w, err)
 		return
 	}
 

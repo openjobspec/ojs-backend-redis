@@ -22,7 +22,7 @@ func NewCronHandler(backend core.Backend) *CronHandler {
 func (h *CronHandler) List(w http.ResponseWriter, r *http.Request) {
 	crons, err := h.backend.ListCron(r.Context())
 	if err != nil {
-		WriteError(w, http.StatusInternalServerError, core.NewInternalError(err.Error()))
+		HandleError(w, err)
 		return
 	}
 
@@ -70,11 +70,7 @@ func (h *CronHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 	created, err := h.backend.RegisterCron(r.Context(), &cronReq)
 	if err != nil {
-		if ojsErr, ok := err.(*core.OJSError); ok {
-			WriteError(w, http.StatusBadRequest, ojsErr)
-			return
-		}
-		WriteError(w, http.StatusInternalServerError, core.NewInternalError(err.Error()))
+		HandleError(w, err)
 		return
 	}
 
@@ -87,13 +83,7 @@ func (h *CronHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	cron, err := h.backend.DeleteCron(r.Context(), name)
 	if err != nil {
-		if ojsErr, ok := err.(*core.OJSError); ok {
-			if ojsErr.Code == core.ErrCodeNotFound {
-				WriteError(w, http.StatusNotFound, ojsErr)
-				return
-			}
-		}
-		WriteError(w, http.StatusInternalServerError, core.NewInternalError(err.Error()))
+		HandleError(w, err)
 		return
 	}
 

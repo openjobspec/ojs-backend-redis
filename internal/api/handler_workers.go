@@ -43,11 +43,7 @@ func (h *WorkerHandler) Fetch(w http.ResponseWriter, r *http.Request) {
 
 	jobs, err := h.backend.Fetch(r.Context(), req.Queues, count, req.WorkerID, visTimeout)
 	if err != nil {
-		if ojsErr, ok := err.(*core.OJSError); ok {
-			WriteError(w, http.StatusInternalServerError, ojsErr)
-			return
-		}
-		WriteError(w, http.StatusInternalServerError, core.NewInternalError(err.Error()))
+		HandleError(w, err)
 		return
 	}
 
@@ -78,17 +74,7 @@ func (h *WorkerHandler) Ack(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := h.backend.Ack(r.Context(), req.JobID, req.Result)
 	if err != nil {
-		if ojsErr, ok := err.(*core.OJSError); ok {
-			switch ojsErr.Code {
-			case core.ErrCodeNotFound:
-				WriteError(w, http.StatusNotFound, ojsErr)
-				return
-			case core.ErrCodeInvalidRequest:
-				WriteError(w, http.StatusConflict, ojsErr)
-				return
-			}
-		}
-		WriteError(w, http.StatusInternalServerError, core.NewInternalError(err.Error()))
+		HandleError(w, err)
 		return
 	}
 
@@ -110,17 +96,7 @@ func (h *WorkerHandler) Nack(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := h.backend.Nack(r.Context(), req.JobID, req.Error, req.Requeue)
 	if err != nil {
-		if ojsErr, ok := err.(*core.OJSError); ok {
-			switch ojsErr.Code {
-			case core.ErrCodeNotFound:
-				WriteError(w, http.StatusNotFound, ojsErr)
-				return
-			case core.ErrCodeInvalidRequest:
-				WriteError(w, http.StatusConflict, ojsErr)
-				return
-			}
-		}
-		WriteError(w, http.StatusInternalServerError, core.NewInternalError(err.Error()))
+		HandleError(w, err)
 		return
 	}
 
@@ -153,7 +129,7 @@ func (h *WorkerHandler) Heartbeat(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := h.backend.Heartbeat(r.Context(), req.WorkerID, activeJobs, visTimeout)
 	if err != nil {
-		WriteError(w, http.StatusInternalServerError, core.NewInternalError(err.Error()))
+		HandleError(w, err)
 		return
 	}
 

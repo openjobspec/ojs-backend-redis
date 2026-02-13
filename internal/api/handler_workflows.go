@@ -50,11 +50,7 @@ func (h *WorkflowHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	created, err := h.backend.CreateWorkflow(r.Context(), &req)
 	if err != nil {
-		if ojsErr, ok := err.(*core.OJSError); ok {
-			WriteError(w, http.StatusBadRequest, ojsErr)
-			return
-		}
-		WriteError(w, http.StatusInternalServerError, core.NewInternalError(err.Error()))
+		HandleError(w, err)
 		return
 	}
 
@@ -67,13 +63,7 @@ func (h *WorkflowHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 	wf, err := h.backend.GetWorkflow(r.Context(), id)
 	if err != nil {
-		if ojsErr, ok := err.(*core.OJSError); ok {
-			if ojsErr.Code == core.ErrCodeNotFound {
-				WriteError(w, http.StatusNotFound, ojsErr)
-				return
-			}
-		}
-		WriteError(w, http.StatusInternalServerError, core.NewInternalError(err.Error()))
+		HandleError(w, err)
 		return
 	}
 
@@ -86,17 +76,7 @@ func (h *WorkflowHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 
 	wf, err := h.backend.CancelWorkflow(r.Context(), id)
 	if err != nil {
-		if ojsErr, ok := err.(*core.OJSError); ok {
-			switch ojsErr.Code {
-			case core.ErrCodeNotFound:
-				WriteError(w, http.StatusNotFound, ojsErr)
-				return
-			case core.ErrCodeInvalidRequest:
-				WriteError(w, http.StatusConflict, ojsErr)
-				return
-			}
-		}
-		WriteError(w, http.StatusInternalServerError, core.NewInternalError(err.Error()))
+		HandleError(w, err)
 		return
 	}
 

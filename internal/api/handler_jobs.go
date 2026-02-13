@@ -37,11 +37,7 @@ func (h *JobHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if ojsErr := core.ValidateEnqueueRequest(req); ojsErr != nil {
-		status := http.StatusBadRequest
-		if ojsErr.Code == core.ErrCodeValidationError {
-			status = http.StatusUnprocessableEntity
-		}
-		WriteError(w, status, ojsErr)
+		WriteOJSError(w, ojsErr)
 		return
 	}
 
@@ -49,18 +45,7 @@ func (h *JobHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	created, pushErr := h.backend.Push(r.Context(), job)
 	if pushErr != nil {
-		if ojsErr, ok := pushErr.(*core.OJSError); ok {
-			status := http.StatusInternalServerError
-			switch ojsErr.Code {
-			case core.ErrCodeDuplicate:
-				status = http.StatusConflict
-			case core.ErrCodeInvalidRequest:
-				status = http.StatusBadRequest
-			}
-			WriteError(w, status, ojsErr)
-			return
-		}
-		WriteError(w, http.StatusInternalServerError, core.NewInternalError(pushErr.Error()))
+		HandleError(w, pushErr)
 		return
 	}
 
@@ -78,13 +63,7 @@ func (h *JobHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 	job, err := h.backend.Info(r.Context(), id)
 	if err != nil {
-		if ojsErr, ok := err.(*core.OJSError); ok {
-			if ojsErr.Code == core.ErrCodeNotFound {
-				WriteError(w, http.StatusNotFound, ojsErr)
-				return
-			}
-		}
-		WriteError(w, http.StatusInternalServerError, core.NewInternalError(err.Error()))
+		HandleError(w, err)
 		return
 	}
 
@@ -97,17 +76,7 @@ func (h *JobHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 
 	job, err := h.backend.Cancel(r.Context(), id)
 	if err != nil {
-		if ojsErr, ok := err.(*core.OJSError); ok {
-			switch ojsErr.Code {
-			case core.ErrCodeNotFound:
-				WriteError(w, http.StatusNotFound, ojsErr)
-				return
-			case core.ErrCodeInvalidRequest:
-				WriteError(w, http.StatusConflict, ojsErr)
-				return
-			}
-		}
-		WriteError(w, http.StatusInternalServerError, core.NewInternalError(err.Error()))
+		HandleError(w, err)
 		return
 	}
 
