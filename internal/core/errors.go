@@ -51,7 +51,7 @@ func NewNotFoundError(resourceType, resourceID string) *OJSError {
 
 func NewConflictError(message string, details map[string]any) *OJSError {
 	return &OJSError{
-		Code:      ErrCodeInvalidRequest,
+		Code:      ErrCodeConflict,
 		Message:   message,
 		Retryable: false,
 		Details:   details,
