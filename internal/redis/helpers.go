@@ -74,30 +74,80 @@ func computeFingerprint(job *core.Job) string {
 	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
-// regexCache caches compiled regular expressions to avoid recompilation per call.
-var regexCache sync.Map
+// regexCacheMaxSize is the maximum number of entries in the regex cache.
+// When exceeded, the oldest half of entries are evicted.
+const regexCacheMaxSize = 256
+
+// regexCacheEntry holds a compiled regex (nil if the pattern was invalid).
+type regexCacheEntry struct {
+	re       *regexp.Regexp
+	valid    bool
+	accessID uint64
+}
+
+// regexCacheMu protects the regexCache map.
+var regexCacheMu sync.Mutex
+
+// regexCache maps full anchored patterns to their compiled regex.
+var regexCache = make(map[string]*regexCacheEntry, regexCacheMaxSize)
+
+// regexCacheAccessCounter is a monotonically increasing counter for LRU eviction.
+var regexCacheAccessCounter uint64
 
 // matchesPattern checks if s matches the given pattern (regex or exact match).
 func matchesPattern(s, pattern string) bool {
 	fullPattern := "^" + pattern + "$"
 
-	// Check cache first
-	if cached, ok := regexCache.Load(fullPattern); ok {
-		if re, ok := cached.(*regexp.Regexp); ok {
-			return re.MatchString(s)
+	regexCacheMu.Lock()
+	entry, ok := regexCache[fullPattern]
+	if ok {
+		regexCacheAccessCounter++
+		entry.accessID = regexCacheAccessCounter
+		regexCacheMu.Unlock()
+		if entry.valid {
+			return entry.re.MatchString(s)
 		}
-		// Cached nil means the pattern was invalid — fall through to exact match
 		return s == pattern
 	}
 
 	// Compile and cache
 	re, err := regexp.Compile(fullPattern)
+	regexCacheAccessCounter++
+	newEntry := &regexCacheEntry{
+		re:       re,
+		valid:    err == nil,
+		accessID: regexCacheAccessCounter,
+	}
+	regexCache[fullPattern] = newEntry
+
+	// Evict oldest half if cache is full
+	if len(regexCache) > regexCacheMaxSize {
+		evictRegexCache()
+	}
+	regexCacheMu.Unlock()
+
 	if err != nil {
-		regexCache.Store(fullPattern, (*regexp.Regexp)(nil))
 		return s == pattern
 	}
-	regexCache.Store(fullPattern, re)
 	return re.MatchString(s)
+}
+
+// evictRegexCache removes the oldest half of entries by accessID.
+// Must be called with regexCacheMu held.
+func evictRegexCache() {
+	// Find the median accessID
+	ids := make([]uint64, 0, len(regexCache))
+	for _, e := range regexCache {
+		ids = append(ids, e.accessID)
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	median := ids[len(ids)/2]
+
+	for k, e := range regexCache {
+		if e.accessID < median {
+			delete(regexCache, k)
+		}
+	}
 }
 
 // workflowJobToJob builds a core.Job from a WorkflowJobRequest with retry policy resolution.

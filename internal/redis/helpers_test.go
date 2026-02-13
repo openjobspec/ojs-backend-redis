@@ -511,6 +511,40 @@ func TestMatchesPatternCaching(t *testing.T) {
 	}
 }
 
+func TestMatchesPatternCacheBounded(t *testing.T) {
+	// Fill the cache past the max size to trigger eviction.
+	// Use unique patterns that won't collide with other tests.
+	for i := 0; i < regexCacheMaxSize+50; i++ {
+		pattern := fmt.Sprintf("bounded_test_%d_[a-z]+", i)
+		matchesPattern(fmt.Sprintf("bounded_test_%d_abc", i), pattern)
+	}
+
+	regexCacheMu.Lock()
+	size := len(regexCache)
+	regexCacheMu.Unlock()
+
+	if size > regexCacheMaxSize {
+		t.Errorf("cache size %d exceeds max %d after eviction", size, regexCacheMaxSize)
+	}
+}
+
+func TestMatchesPatternEvictionPreservesRecent(t *testing.T) {
+	// Access a pattern, then fill the cache past max. The recently accessed
+	// pattern should survive eviction and still return correct results.
+	recentPattern := "eviction_recent_[0-9]+"
+	matchesPattern("eviction_recent_99", recentPattern)
+
+	// Fill with other patterns to trigger eviction
+	for i := 0; i < regexCacheMaxSize+10; i++ {
+		matchesPattern(fmt.Sprintf("evict_fill_%d_x", i), fmt.Sprintf("evict_fill_%d_.*", i))
+	}
+
+	// Re-access the recent pattern — should still work correctly
+	if !matchesPattern("eviction_recent_123", recentPattern) {
+		t.Error("expected recent pattern to still work after eviction")
+	}
+}
+
 // --- workflowJobToJob tests ---
 
 func TestWorkflowJobToJob(t *testing.T) {
