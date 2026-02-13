@@ -2,7 +2,7 @@ package scheduler
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"sync"
 	"time"
 )
@@ -54,7 +54,7 @@ func (s *Scheduler) runLoop(name string, interval time.Duration, fn func(context
 		case <-ticker.C:
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			if err := fn(ctx); err != nil {
-				log.Printf("[%s] error: %v", name, err)
+				slog.Error("scheduler loop error", "loop", name, "error", err)
 			}
 			cancel()
 		}

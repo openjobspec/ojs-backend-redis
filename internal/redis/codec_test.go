@@ -1,6 +1,7 @@
 package redis
 
 import (
+	"bytes"
 	"encoding/json"
 	"strconv"
 	"testing"
@@ -263,7 +264,10 @@ func TestJobToHash(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			h := jobToHash(tt.job)
+			h, err := jobToHash(tt.job)
+			if err != nil {
+				t.Fatalf("jobToHash returned error: %v", err)
+			}
 
 			// Verify expected key-value pairs
 			for key, wantVal := range tt.wantKeys {
@@ -301,7 +305,10 @@ func TestJobToHash_RetryJSON(t *testing.T) {
 			BackoffCoefficient: 2.0,
 		},
 	}
-	h := jobToHash(job)
+	h, err := jobToHash(job)
+	if err != nil {
+		t.Fatalf("jobToHash returned error: %v", err)
+	}
 	raw, ok := h["retry"]
 	if !ok {
 		t.Fatal("retry key missing")
@@ -330,7 +337,10 @@ func TestJobToHash_UniqueJSON(t *testing.T) {
 			OnConflict: "reject",
 		},
 	}
-	h := jobToHash(job)
+	h, err := jobToHash(job)
+	if err != nil {
+		t.Fatalf("jobToHash returned error: %v", err)
+	}
 	raw, ok := h["unique"]
 	if !ok {
 		t.Fatal("unique key missing")
@@ -928,7 +938,10 @@ func TestRoundtrip(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Convert Job -> hash
-			h := jobToHash(tt.job)
+			h, err := jobToHash(tt.job)
+			if err != nil {
+				t.Fatalf("jobToHash returned error: %v", err)
+			}
 
 			// Convert hash values to map[string]string (as Redis stores them)
 			strMap := make(map[string]string, len(h))
@@ -1051,7 +1064,7 @@ func TestRoundtrip(t *testing.T) {
 			} else if tt.job.Retry != nil {
 				wantJSON, _ := json.Marshal(tt.job.Retry)
 				gotJSON, _ := json.Marshal(got.Retry)
-				if string(gotJSON) != string(wantJSON) {
+				if !bytes.Equal(gotJSON, wantJSON) {
 					t.Errorf("Retry: got %s, want %s", string(gotJSON), string(wantJSON))
 				}
 			}
@@ -1062,7 +1075,7 @@ func TestRoundtrip(t *testing.T) {
 			} else if tt.job.Unique != nil {
 				wantJSON, _ := json.Marshal(tt.job.Unique)
 				gotJSON, _ := json.Marshal(got.Unique)
-				if string(gotJSON) != string(wantJSON) {
+				if !bytes.Equal(gotJSON, wantJSON) {
 					t.Errorf("Unique: got %s, want %s", string(gotJSON), string(wantJSON))
 				}
 			}
@@ -1368,7 +1381,10 @@ func TestJobToHash_AllValuesAreStrings(t *testing.T) {
 		},
 	}
 
-	h := jobToHash(job)
+	h, err := jobToHash(job)
+	if err != nil {
+		t.Fatalf("jobToHash returned error: %v", err)
+	}
 	for k, v := range h {
 		if _, ok := v.(string); !ok {
 			t.Errorf("key %q: value type is %T, want string", k, v)

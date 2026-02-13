@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"strconv"
 	"time"
 
@@ -55,12 +55,18 @@ func (b *RedisBackend) CreateWorkflow(ctx context.Context, req *core.WorkflowReq
 		"created_at": core.FormatTime(now),
 	}
 	if req.Callbacks != nil {
-		cbJSON, _ := json.Marshal(req.Callbacks)
+		cbJSON, err := json.Marshal(req.Callbacks)
+		if err != nil {
+			return nil, fmt.Errorf("marshal workflow callbacks: %w", err)
+		}
 		wfHash["callbacks"] = string(cbJSON)
 	}
 
 	// Store workflow job definitions for chain (needed to enqueue later steps)
-	jobDefs, _ := json.Marshal(jobs)
+	jobDefs, err := json.Marshal(jobs)
+	if err != nil {
+		return nil, fmt.Errorf("marshal workflow job definitions: %w", err)
+	}
 	wfHash["job_defs"] = string(jobDefs)
 
 	if err := b.client.HSet(ctx, workflowKey(wfID), wfHash).Err(); err != nil {
@@ -75,7 +81,7 @@ func (b *RedisBackend) CreateWorkflow(ctx context.Context, req *core.WorkflowReq
 			return nil, err
 		}
 		if err := b.client.RPush(ctx, workflowKey(wfID)+":jobs", created.ID).Err(); err != nil {
-			log.Printf("[workflow] error storing job ID for workflow %s: %v", wfID, err)
+			slog.Error("workflow: error tracking job", "job_id", created.ID, "workflow_id", wfID, "error", err)
 		}
 	} else {
 		// Group/Batch: enqueue all jobs immediately
@@ -86,7 +92,7 @@ func (b *RedisBackend) CreateWorkflow(ctx context.Context, req *core.WorkflowReq
 				return nil, err
 			}
 			if err := b.client.RPush(ctx, workflowKey(wfID)+":jobs", created.ID).Err(); err != nil {
-				log.Printf("[workflow] error storing job ID for workflow %s: %v", wfID, err)
+				slog.Error("workflow: error tracking job", "job_id", created.ID, "workflow_id", wfID, "error", err)
 			}
 		}
 	}
@@ -146,7 +152,7 @@ func (b *RedisBackend) CancelWorkflow(ctx context.Context, id string) (*core.Wor
 		jobState, _ := b.client.HGet(ctx, jobKey(jobID), "state").Result()
 		if jobState != "" && !core.IsTerminalState(jobState) {
 			if _, err := b.Cancel(ctx, jobID); err != nil {
-				log.Printf("[workflow] error cancelling job %s in workflow %s: %v", jobID, id, err)
+				slog.Error("workflow: error cancelling job", "job_id", jobID, "workflow_id", id, "error", err)
 			}
 		}
 	}
@@ -158,7 +164,7 @@ func (b *RedisBackend) CancelWorkflow(ctx context.Context, id string) (*core.Wor
 		"state":        "cancelled",
 		"completed_at": wf.CompletedAt,
 	}).Err(); err != nil {
-		log.Printf("[workflow] error updating cancelled workflow %s: %v", id, err)
+		slog.Error("workflow: error updating cancelled workflow", "workflow_id", id, "error", err)
 	}
 
 	return wf, nil
@@ -255,7 +261,7 @@ func (b *RedisBackend) enqueueChainStep(ctx context.Context, workflowID string, 
 	}
 
 	if err := b.client.RPush(ctx, workflowKey(workflowID)+":jobs", created.ID).Err(); err != nil {
-		log.Printf("[workflow] error storing chain step job ID for workflow %s: %v", workflowID, err)
+		slog.Error("workflow: error tracking job", "job_id", created.ID, "workflow_id", workflowID, "error", err)
 	}
 	return nil
 }
@@ -269,7 +275,7 @@ func (b *RedisBackend) fireBatchCallbacks(ctx context.Context, workflowID string
 
 	var callbacks core.WorkflowCallbacks
 	if err := json.Unmarshal([]byte(cbStr), &callbacks); err != nil {
-		log.Printf("[workflow] error parsing callbacks for workflow %s: %v", workflowID, err)
+		slog.Error("workflow: error parsing callbacks", "workflow_id", workflowID, "error", err)
 		return
 	}
 
@@ -300,7 +306,7 @@ func (b *RedisBackend) fireCallback(ctx context.Context, cb *core.WorkflowCallba
 		Args:  cb.Args,
 		Queue: queue,
 	}); err != nil {
-		log.Printf("[workflow] error firing callback job %s: %v", cb.Type, err)
+		slog.Error("workflow: error firing callback", "type", cb.Type, "error", err)
 	}
 }
 

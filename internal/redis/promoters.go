@@ -3,7 +3,7 @@ package redis
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"strconv"
 	"time"
 
@@ -61,7 +61,7 @@ func (b *RedisBackend) RequeueStalled(ctx context.Context) error {
 			if _, err := requeueStalledScript.Run(ctx, b.client, nil,
 				jobID, queue, nowFormatted, nowMs,
 			).Result(); err != nil {
-				log.Printf("[requeue-stalled] error running requeue script for job %s: %v", jobID, err)
+				slog.Error("requeue-stalled: error running requeue script", "job_id", jobID, "error", err)
 			}
 		}
 	}

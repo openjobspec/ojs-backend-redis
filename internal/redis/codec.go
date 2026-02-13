@@ -2,39 +2,30 @@ package redis
 
 import (
 	"encoding/json"
+	"fmt"
+	"log/slog"
 	"strconv"
 
 	"github.com/openjobspec/ojs-backend-redis/internal/core"
 )
 
-// Known hash fields for the job in Redis
-var knownHashFields = map[string]bool{
-	"id": true, "type": true, "state": true, "queue": true,
-	"args": true, "meta": true, "priority": true, "attempt": true,
-	"max_attempts": true, "timeout_ms": true, "created_at": true,
-	"enqueued_at": true, "started_at": true, "completed_at": true,
-	"cancelled_at": true, "scheduled_at": true, "result": true,
-	"error": true, "tags": true, "retry": true, "unique": true,
-	"expires_at": true, "worker_id": true, "visibility_timeout": true,
-	"visibility_timeout_ms": true,
-	"error_history": true, "workflow_id": true, "workflow_step": true,
-	"parent_results": true, "retry_delay_ms": true,
-}
-
 // jobToHash converts a Job to a map for Redis HSET.
-func jobToHash(job *core.Job) map[string]any {
+func jobToHash(job *core.Job) (map[string]any, error) {
 	h := map[string]any{
-		"id":       job.ID,
-		"type":     job.Type,
-		"state":    job.State,
-		"queue":    job.Queue,
-		"attempt":  strconv.Itoa(job.Attempt),
+		"id":      job.ID,
+		"type":    job.Type,
+		"state":   job.State,
+		"queue":   job.Queue,
+		"attempt": strconv.Itoa(job.Attempt),
 	}
 
 	if job.Args != nil {
 		h["args"] = string(job.Args)
 	}
-	if job.Meta != nil && len(job.Meta) > 0 {
+	if job.WorkerID != "" {
+		h["worker_id"] = job.WorkerID
+	}
+	if len(job.Meta) > 0 {
 		h["meta"] = string(job.Meta)
 	}
 	if job.Priority != nil {
@@ -64,22 +55,31 @@ func jobToHash(job *core.Job) map[string]any {
 	if job.ScheduledAt != "" {
 		h["scheduled_at"] = job.ScheduledAt
 	}
-	if job.Result != nil && len(job.Result) > 0 {
+	if len(job.Result) > 0 {
 		h["result"] = string(job.Result)
 	}
-	if job.Error != nil && len(job.Error) > 0 {
+	if len(job.Error) > 0 {
 		h["error"] = string(job.Error)
 	}
 	if len(job.Tags) > 0 {
-		tagsJSON, _ := json.Marshal(job.Tags)
+		tagsJSON, err := json.Marshal(job.Tags)
+		if err != nil {
+			return nil, fmt.Errorf("marshal tags: %w", err)
+		}
 		h["tags"] = string(tagsJSON)
 	}
 	if job.Retry != nil {
-		retryJSON, _ := json.Marshal(job.Retry)
+		retryJSON, err := json.Marshal(job.Retry)
+		if err != nil {
+			return nil, fmt.Errorf("marshal retry policy: %w", err)
+		}
 		h["retry"] = string(retryJSON)
 	}
 	if job.Unique != nil {
-		uniqueJSON, _ := json.Marshal(job.Unique)
+		uniqueJSON, err := json.Marshal(job.Unique)
+		if err != nil {
+			return nil, fmt.Errorf("marshal unique policy: %w", err)
+		}
 		h["unique"] = string(uniqueJSON)
 	}
 	if job.ExpiresAt != "" {
@@ -95,7 +95,10 @@ func jobToHash(job *core.Job) map[string]any {
 		h["workflow_step"] = strconv.Itoa(job.WorkflowStep)
 	}
 	if len(job.ParentResults) > 0 {
-		prJSON, _ := json.Marshal(job.ParentResults)
+		prJSON, err := json.Marshal(job.ParentResults)
+		if err != nil {
+			return nil, fmt.Errorf("marshal parent results: %w", err)
+		}
 		h["parent_results"] = string(prJSON)
 	}
 
@@ -104,7 +107,7 @@ func jobToHash(job *core.Job) map[string]any {
 		h["x:"+k] = string(v)
 	}
 
-	return h
+	return h, nil
 }
 
 // hashToJob converts a Redis hash map to a Job.
@@ -122,6 +125,9 @@ func hashToJob(data map[string]string) *core.Job {
 
 	if v, ok := data["args"]; ok {
 		job.Args = json.RawMessage(v)
+	}
+	if v, ok := data["worker_id"]; ok && v != "" {
+		job.WorkerID = v
 	}
 	if v, ok := data["meta"]; ok && v != "" {
 		job.Meta = json.RawMessage(v)
@@ -170,18 +176,27 @@ func hashToJob(data map[string]string) *core.Job {
 	}
 	if v, ok := data["tags"]; ok && v != "" {
 		var tags []string
-		json.Unmarshal([]byte(v), &tags)
-		job.Tags = tags
+		if err := json.Unmarshal([]byte(v), &tags); err != nil {
+			slog.Error("codec: error parsing tags", "job_id", job.ID, "error", err)
+		} else {
+			job.Tags = tags
+		}
 	}
 	if v, ok := data["retry"]; ok && v != "" {
 		var retry core.RetryPolicy
-		json.Unmarshal([]byte(v), &retry)
-		job.Retry = &retry
+		if err := json.Unmarshal([]byte(v), &retry); err != nil {
+			slog.Error("codec: error parsing retry policy", "job_id", job.ID, "error", err)
+		} else {
+			job.Retry = &retry
+		}
 	}
 	if v, ok := data["unique"]; ok && v != "" {
 		var unique core.UniquePolicy
-		json.Unmarshal([]byte(v), &unique)
-		job.Unique = &unique
+		if err := json.Unmarshal([]byte(v), &unique); err != nil {
+			slog.Error("codec: error parsing unique policy", "job_id", job.ID, "error", err)
+		} else {
+			job.Unique = &unique
+		}
 	}
 	if v, ok := data["expires_at"]; ok && v != "" {
 		job.ExpiresAt = v

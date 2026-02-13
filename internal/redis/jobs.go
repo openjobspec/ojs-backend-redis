@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"strconv"
 	"time"
 
@@ -43,7 +43,10 @@ func (b *RedisBackend) Push(ctx context.Context, job *core.Job) (*core.Job, erro
 
 		statesJSON := ""
 		if len(job.Unique.States) > 0 {
-			j, _ := json.Marshal(job.Unique.States)
+			j, err := json.Marshal(job.Unique.States)
+			if err != nil {
+				return nil, fmt.Errorf("marshal unique states: %w", err)
+			}
 			statesJSON = string(j)
 		}
 
@@ -55,7 +58,7 @@ func (b *RedisBackend) Push(ctx context.Context, job *core.Job) (*core.Job, erro
 			statesJSON,
 		).Result()
 		if err != nil {
-			log.Printf("[push] error checking unique key for job %s: %v", job.ID, err)
+			slog.Error("push: error checking unique key", "job_id", job.ID, "error", err)
 		} else {
 			_, data := parseLuaResult(res)
 			if len(data) > 0 {
@@ -94,7 +97,7 @@ func (b *RedisBackend) Push(ctx context.Context, job *core.Job) (*core.Job, erro
 						existingID, _ = data[1].(string)
 					}
 					if _, err := b.Cancel(ctx, existingID); err != nil {
-						log.Printf("[push] error cancelling existing job %s during replace: %v", existingID, err)
+						slog.Error("push: error cancelling existing job during replace", "job_id", existingID, "error", err)
 					}
 				// "proceed": continue with normal enqueue
 				}
@@ -110,8 +113,12 @@ func (b *RedisBackend) Push(ctx context.Context, job *core.Job) (*core.Job, erro
 			job.EnqueuedAt = core.FormatTime(now)
 
 			// Store job and add to scheduled set
+			hash, hashErr := jobToHash(job)
+			if hashErr != nil {
+				return nil, fmt.Errorf("serialize job: %w", hashErr)
+			}
 			pipe := b.client.Pipeline()
-			pipe.HSet(ctx, jobKey(job.ID), jobToHash(job))
+			pipe.HSet(ctx, jobKey(job.ID), hash)
 			pipe.ZAdd(ctx, scheduledKey(), redis.Z{
 				Score:  float64(scheduledTime.UnixMilli()),
 				Member: job.ID,
@@ -132,8 +139,12 @@ func (b *RedisBackend) Push(ctx context.Context, job *core.Job) (*core.Job, erro
 	score := computeScore(job.Priority, now)
 
 	// Store job and add to available queue
+	hash, hashErr := jobToHash(job)
+	if hashErr != nil {
+		return nil, fmt.Errorf("serialize job: %w", hashErr)
+	}
 	pipe := b.client.Pipeline()
-	pipe.HSet(ctx, jobKey(job.ID), jobToHash(job))
+	pipe.HSet(ctx, jobKey(job.ID), hash)
 	pipe.ZAdd(ctx, queueAvailableKey(job.Queue), redis.Z{
 		Score:  score,
 		Member: job.ID,
@@ -227,7 +238,7 @@ func (b *RedisBackend) Fetch(ctx context.Context, queues []string, count int, wo
 
 			// Record rate limit timestamp for this queue
 			if err := b.client.Set(ctx, queueRateLimitLastKey(queue), strconv.FormatInt(time.Now().UnixMilli(), 10), 0).Err(); err != nil {
-				log.Printf("[fetch] error recording rate limit timestamp for queue %s: %v", queue, err)
+				slog.Error("fetch: error recording rate limit timestamp", "queue", queue, "error", err)
 			}
 
 			// Get the full job
@@ -278,7 +289,7 @@ func (b *RedisBackend) Ack(ctx context.Context, jobID string, result []byte) (*c
 
 	// Check if this job is part of a workflow
 	if err := b.advanceWorkflow(ctx, jobID, core.StateCompleted, result); err != nil {
-		log.Printf("[ack] error advancing workflow for job %s: %v", jobID, err)
+		slog.Error("ack: error advancing workflow", "job_id", jobID, "error", err)
 	}
 
 	// Fetch the full updated job for the response
@@ -379,14 +390,17 @@ func (b *RedisBackend) Nack(ctx context.Context, jobID string, jobErr *core.JobE
 		if jobErr.Details != nil {
 			errObj["details"] = jobErr.Details
 		}
-		errJSON, _ = json.Marshal(errObj)
+		errJSON, err = json.Marshal(errObj)
+		if err != nil {
+			return nil, fmt.Errorf("marshal job error: %w", err)
+		}
 	}
 
 	// Update error history
 	var errorHistory []json.RawMessage
 	if hist, ok := data["error_history"]; ok && hist != "" {
 		if err := json.Unmarshal([]byte(hist), &errorHistory); err != nil {
-			log.Printf("[nack] error parsing error history for job %s: %v", jobID, err)
+			slog.Error("nack: error parsing error history", "job_id", jobID, "error", err)
 		}
 	}
 	if errJSON != nil {
@@ -394,7 +408,7 @@ func (b *RedisBackend) Nack(ctx context.Context, jobID string, jobErr *core.JobE
 	}
 	histJSON, err := json.Marshal(errorHistory)
 	if err != nil {
-		log.Printf("[nack] error marshaling error history for job %s: %v", jobID, err)
+		slog.Error("nack: error marshaling error history", "job_id", jobID, "error", err)
 	}
 
 	// Check if error is non-retryable
@@ -408,7 +422,7 @@ func (b *RedisBackend) Nack(ctx context.Context, jobID string, jobErr *core.JobE
 	if v, ok := data["retry"]; ok && v != "" {
 		var rp core.RetryPolicy
 		if err := json.Unmarshal([]byte(v), &rp); err != nil {
-			log.Printf("[nack] error parsing retry policy for job %s: %v", jobID, err)
+			slog.Error("nack: error parsing retry policy", "job_id", jobID, "error", err)
 		} else {
 			retryPolicy = &rp
 		}
@@ -461,7 +475,7 @@ func (b *RedisBackend) Nack(ctx context.Context, jobID string, jobErr *core.JobE
 		}
 
 		if err := b.advanceWorkflow(ctx, jobID, core.StateDiscarded, nil); err != nil {
-			log.Printf("[nack] error advancing workflow for discarded job %s: %v", jobID, err)
+			slog.Error("nack: error advancing workflow for discarded job", "job_id", jobID, "error", err)
 		}
 
 		job, _ := b.Info(ctx, jobID)

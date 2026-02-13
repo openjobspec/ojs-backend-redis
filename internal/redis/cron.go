@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"sort"
 	"time"
 
@@ -71,7 +71,10 @@ func (b *RedisBackend) RegisterCron(ctx context.Context, cronJob *core.CronJob) 
 	}
 	cronJob.Enabled = true
 
-	data, _ := json.Marshal(cronJob)
+	data, err := json.Marshal(cronJob)
+	if err != nil {
+		return nil, fmt.Errorf("marshal cron job: %w", err)
+	}
 	pipe := b.client.Pipeline()
 	pipe.Set(ctx, cronKey(cronJob.Name), string(data), 0)
 	pipe.SAdd(ctx, cronNamesKey(), cronJob.Name)
@@ -203,14 +206,14 @@ func (b *RedisBackend) FireCronJobs(ctx context.Context) error {
 
 		created, pushErr := b.Push(ctx, job)
 		if pushErr != nil {
-			log.Printf("[cron] error firing cron job %s: %v", name, pushErr)
+			slog.Error("cron: error firing job", "name", name, "error", pushErr)
 			continue
 		}
 
 		// Track the instance for overlap checking
 		if cronJob.OverlapPolicy == "skip" {
 			if err := b.client.Set(ctx, cronInstanceKey(name), created.ID, 0).Err(); err != nil {
-				log.Printf("[cron] error tracking instance for %s: %v", name, err)
+				slog.Error("cron: error tracking instance", "name", name, "error", err)
 			}
 		}
 
@@ -238,13 +241,17 @@ func (b *RedisBackend) updateCronNextRun(ctx context.Context, name string, cronJ
 	}
 	schedule, err := parser.Parse(expr)
 	if err != nil {
-		log.Printf("[cron] error parsing expression for %s: %v", name, err)
+		slog.Error("cron: error parsing expression", "name", name, "error", err)
 		return
 	}
 	cronJob.LastRunAt = core.FormatTime(now)
 	cronJob.NextRunAt = core.FormatTime(schedule.Next(now))
-	cronData, _ := json.Marshal(cronJob)
+	cronData, marshalErr := json.Marshal(cronJob)
+	if marshalErr != nil {
+		slog.Error("cron: error marshaling job", "name", name, "error", marshalErr)
+		return
+	}
 	if err := b.client.Set(ctx, cronKey(name), string(cronData), 0).Err(); err != nil {
-		log.Printf("[cron] error updating next run for %s: %v", name, err)
+		slog.Error("cron: error updating next run", "name", name, "error", err)
 	}
 }
