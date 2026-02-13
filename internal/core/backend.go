@@ -5,61 +5,72 @@ import (
 	"encoding/json"
 )
 
-// Backend defines the interface for OJS backend implementations.
-type Backend interface {
-	// Push enqueues a job.
+// JobManager handles core job lifecycle operations.
+type JobManager interface {
 	Push(ctx context.Context, job *Job) (*Job, error)
-
-	// Fetch claims jobs from the specified queues.
-	Fetch(ctx context.Context, queues []string, count int, workerID string, visibilityTimeoutMs int) ([]*Job, error)
-
-	// Ack acknowledges a job as completed.
-	Ack(ctx context.Context, jobID string, result []byte) (*AckResponse, error)
-
-	// Nack reports a job failure.
-	Nack(ctx context.Context, jobID string, jobErr *JobError, requeue bool) (*NackResponse, error)
-
-	// Info retrieves job details.
+	PushBatch(ctx context.Context, jobs []*Job) ([]*Job, error)
 	Info(ctx context.Context, jobID string) (*Job, error)
-
-	// Cancel cancels a job.
 	Cancel(ctx context.Context, jobID string) (*Job, error)
+}
 
-	// ListQueues returns all known queues.
-	ListQueues(ctx context.Context) ([]QueueInfo, error)
-
-	// Health returns the health status.
-	Health(ctx context.Context) (*HealthResponse, error)
-
-	// Heartbeat extends visibility and reports worker state.
+// WorkerManager handles worker-side operations (fetch, ack, nack, heartbeat).
+type WorkerManager interface {
+	Fetch(ctx context.Context, queues []string, count int, workerID string, visibilityTimeoutMs int) ([]*Job, error)
+	Ack(ctx context.Context, jobID string, result []byte) (*AckResponse, error)
+	Nack(ctx context.Context, jobID string, jobErr *JobError, requeue bool) (*NackResponse, error)
 	Heartbeat(ctx context.Context, workerID string, activeJobs []string, visibilityTimeoutMs int) (*HeartbeatResponse, error)
+	SetWorkerState(ctx context.Context, workerID string, state string) error
+}
 
-	// Dead letter operations
+// QueueManager handles queue-level operations.
+type QueueManager interface {
+	ListQueues(ctx context.Context) ([]QueueInfo, error)
+	QueueStats(ctx context.Context, name string) (*QueueStats, error)
+	PauseQueue(ctx context.Context, name string) error
+	ResumeQueue(ctx context.Context, name string) error
+}
+
+// DeadLetterManager handles dead letter queue operations.
+type DeadLetterManager interface {
 	ListDeadLetter(ctx context.Context, limit, offset int) ([]*Job, int, error)
 	RetryDeadLetter(ctx context.Context, jobID string) (*Job, error)
 	DeleteDeadLetter(ctx context.Context, jobID string) error
+}
 
-	// Cron operations
+// CronManager handles cron job operations.
+type CronManager interface {
 	RegisterCron(ctx context.Context, cron *CronJob) (*CronJob, error)
 	ListCron(ctx context.Context) ([]*CronJob, error)
 	DeleteCron(ctx context.Context, name string) (*CronJob, error)
+}
 
-	// Workflow operations
+// WorkflowManager handles workflow operations.
+type WorkflowManager interface {
 	CreateWorkflow(ctx context.Context, req *WorkflowRequest) (*Workflow, error)
 	GetWorkflow(ctx context.Context, id string) (*Workflow, error)
 	CancelWorkflow(ctx context.Context, id string) (*Workflow, error)
 	AdvanceWorkflow(ctx context.Context, workflowID string, jobID string, result json.RawMessage, failed bool) error
+}
 
-	// Batch enqueue
-	PushBatch(ctx context.Context, jobs []*Job) ([]*Job, error)
+// AdminManager handles admin listing operations.
+type AdminManager interface {
+	ListJobs(ctx context.Context, filters JobListFilters, limit, offset int) ([]*Job, int, error)
+	ListWorkers(ctx context.Context, limit, offset int) ([]*WorkerInfo, WorkerSummary, error)
+}
 
-	// Queue operations
-	QueueStats(ctx context.Context, name string) (*QueueStats, error)
-	PauseQueue(ctx context.Context, name string) error
-	ResumeQueue(ctx context.Context, name string) error
+// Backend defines the full interface for OJS backend implementations,
+// composing all role-specific interfaces.
+type Backend interface {
+	JobManager
+	WorkerManager
+	QueueManager
+	DeadLetterManager
+	CronManager
+	WorkflowManager
+	AdminManager
 
-	// SetWorkerState sets a directive for a worker.
-	SetWorkerState(ctx context.Context, workerID string, state string) error
+	// Health returns the health status.
+	Health(ctx context.Context) (*HealthResponse, error)
 
 	// Close closes the backend connection.
 	Close() error
@@ -94,9 +105,9 @@ type QueueInfo struct {
 
 // QueueStats represents detailed queue statistics.
 type QueueStats struct {
-	Queue     string `json:"queue"`
-	Status    string `json:"status"`
-	Stats     Stats  `json:"stats"`
+	Queue  string `json:"queue"`
+	Status string `json:"status"`
+	Stats  Stats  `json:"stats"`
 }
 
 // Stats holds queue statistics counts.
@@ -107,6 +118,31 @@ type Stats struct {
 	Scheduled int `json:"scheduled"`
 	Retryable int `json:"retryable"`
 	Dead      int `json:"dead"`
+}
+
+// JobListFilters represents supported filters for admin job listing.
+type JobListFilters struct {
+	State    string `json:"state,omitempty"`
+	Queue    string `json:"queue,omitempty"`
+	Type     string `json:"type,omitempty"`
+	WorkerID string `json:"worker_id,omitempty"`
+}
+
+// WorkerInfo represents admin-visible worker state.
+type WorkerInfo struct {
+	ID            string `json:"id"`
+	State         string `json:"state"`
+	Directive     string `json:"directive"`
+	ActiveJobs    int    `json:"active_jobs"`
+	LastHeartbeat string `json:"last_heartbeat,omitempty"`
+}
+
+// WorkerSummary represents aggregate worker counts.
+type WorkerSummary struct {
+	Total   int `json:"total"`
+	Running int `json:"running"`
+	Quiet   int `json:"quiet"`
+	Stale   int `json:"stale"`
 }
 
 // HealthResponse represents the health check response.
@@ -142,22 +178,22 @@ type CronJobTemplate struct {
 
 // CronJob represents a registered cron job.
 type CronJob struct {
-	Name          string          `json:"name"`
-	Expression    string          `json:"expression"`
-	Timezone      string          `json:"timezone,omitempty"`
-	OverlapPolicy string          `json:"overlap_policy,omitempty"`
-	Enabled       bool            `json:"enabled"`
+	Name          string           `json:"name"`
+	Expression    string           `json:"expression"`
+	Timezone      string           `json:"timezone,omitempty"`
+	OverlapPolicy string           `json:"overlap_policy,omitempty"`
+	Enabled       bool             `json:"enabled"`
 	JobTemplate   *CronJobTemplate `json:"job_template,omitempty"`
-	CreatedAt     string          `json:"created_at,omitempty"`
-	NextRunAt     string          `json:"next_run_at,omitempty"`
-	LastRunAt     string          `json:"last_run_at,omitempty"`
+	CreatedAt     string           `json:"created_at,omitempty"`
+	NextRunAt     string           `json:"next_run_at,omitempty"`
+	LastRunAt     string           `json:"last_run_at,omitempty"`
 
 	// Legacy flat fields (kept for internal use)
-	JobType    string          `json:"-"`
-	Args       json.RawMessage `json:"-"`
-	Queue      string          `json:"-"`
-	Meta       json.RawMessage `json:"-"`
-	Schedule   string          `json:"-"`
+	JobType  string          `json:"-"`
+	Args     json.RawMessage `json:"-"`
+	Queue    string          `json:"-"`
+	Meta     json.RawMessage `json:"-"`
+	Schedule string          `json:"-"`
 }
 
 // WorkflowRequest represents the request body for creating a workflow.
