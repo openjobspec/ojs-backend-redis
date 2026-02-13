@@ -1,9 +1,6 @@
 package server
 
-import (
-	"os"
-	"strconv"
-)
+import "os"
 
 // Config holds server configuration from environment variables.
 type Config struct {
@@ -26,11 +23,3 @@ func getEnv(key, defaultVal string) string {
 	return defaultVal
 }
 
-func getEnvInt(key string, defaultVal int) int {
-	if val, ok := os.LookupEnv(key); ok {
-		if n, err := strconv.Atoi(val); err == nil {
-			return n
-		}
-	}
-	return defaultVal
-}
