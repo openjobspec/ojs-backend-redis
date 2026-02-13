@@ -23,36 +23,37 @@ func NowFormatted() string {
 
 // Job represents a complete OJS job envelope.
 type Job struct {
-	ID          string          `json:"id"`
-	Type        string          `json:"type"`
-	State       string          `json:"state"`
-	Queue       string          `json:"queue"`
-	Args        json.RawMessage `json:"args"`
-	Meta        json.RawMessage `json:"meta,omitempty"`
-	Priority    *int            `json:"priority,omitempty"`
-	Attempt     int             `json:"attempt"`
-	MaxAttempts *int            `json:"max_attempts,omitempty"`
-	TimeoutMs   *int            `json:"timeout_ms,omitempty"`
-	CreatedAt   string          `json:"created_at"`
-	EnqueuedAt  string          `json:"enqueued_at,omitempty"`
-	StartedAt   string          `json:"started_at,omitempty"`
-	CompletedAt string          `json:"completed_at,omitempty"`
-	CancelledAt string          `json:"cancelled_at,omitempty"`
-	ScheduledAt string          `json:"scheduled_at,omitempty"`
-	Result      json.RawMessage `json:"result,omitempty"`
-	Error        json.RawMessage `json:"error,omitempty"`
-	Errors       []json.RawMessage `json:"errors,omitempty"`
-	Tags         []string        `json:"tags,omitempty"`
-	Retry        *RetryPolicy    `json:"retry,omitempty"`
-	Unique       *UniquePolicy   `json:"unique,omitempty"`
-	ExpiresAt            string          `json:"expires_at,omitempty"`
-	RetryDelayMs         *int64          `json:"retry_delay_ms,omitempty"`
-	ParentResults        []json.RawMessage `json:"parent_results,omitempty"`
-	VisibilityTimeoutMs  *int              `json:"-"`
-	WorkflowID           string            `json:"-"`
-	WorkflowStep         int               `json:"-"`
-	IsExisting           bool              `json:"-"`
-	RateLimit            *RateLimitPolicy  `json:"-"`
+	ID                  string            `json:"id"`
+	Type                string            `json:"type"`
+	State               string            `json:"state"`
+	Queue               string            `json:"queue"`
+	WorkerID            string            `json:"worker_id,omitempty"`
+	Args                json.RawMessage   `json:"args"`
+	Meta                json.RawMessage   `json:"meta,omitempty"`
+	Priority            *int              `json:"priority,omitempty"`
+	Attempt             int               `json:"attempt"`
+	MaxAttempts         *int              `json:"max_attempts,omitempty"`
+	TimeoutMs           *int              `json:"timeout_ms,omitempty"`
+	CreatedAt           string            `json:"created_at"`
+	EnqueuedAt          string            `json:"enqueued_at,omitempty"`
+	StartedAt           string            `json:"started_at,omitempty"`
+	CompletedAt         string            `json:"completed_at,omitempty"`
+	CancelledAt         string            `json:"cancelled_at,omitempty"`
+	ScheduledAt         string            `json:"scheduled_at,omitempty"`
+	Result              json.RawMessage   `json:"result,omitempty"`
+	Error               json.RawMessage   `json:"error,omitempty"`
+	Errors              []json.RawMessage `json:"errors,omitempty"`
+	Tags                []string          `json:"tags,omitempty"`
+	Retry               *RetryPolicy      `json:"retry,omitempty"`
+	Unique              *UniquePolicy     `json:"unique,omitempty"`
+	ExpiresAt           string            `json:"expires_at,omitempty"`
+	RetryDelayMs        *int64            `json:"retry_delay_ms,omitempty"`
+	ParentResults       []json.RawMessage `json:"parent_results,omitempty"`
+	VisibilityTimeoutMs *int              `json:"-"`
+	WorkflowID          string            `json:"-"`
+	WorkflowStep        int               `json:"-"`
+	IsExisting          bool              `json:"-"`
+	RateLimit           *RateLimitPolicy  `json:"-"`
 
 	// Unknown fields for forward compatibility
 	UnknownFields map[string]json.RawMessage `json:"-"`
@@ -67,11 +68,14 @@ func (j *Job) MarshalJSON() ([]byte, error) {
 	m["state"] = j.State
 	m["queue"] = j.Queue
 	m["attempt"] = j.Attempt
+	if j.WorkerID != "" {
+		m["worker_id"] = j.WorkerID
+	}
 
 	if j.Args != nil {
 		m["args"] = json.RawMessage(j.Args)
 	}
-	if j.Meta != nil && len(j.Meta) > 0 {
+	if len(j.Meta) > 0 {
 		m["meta"] = json.RawMessage(j.Meta)
 	}
 	if j.Priority != nil {
@@ -101,10 +105,10 @@ func (j *Job) MarshalJSON() ([]byte, error) {
 	if j.ScheduledAt != "" {
 		m["scheduled_at"] = j.ScheduledAt
 	}
-	if j.Result != nil && len(j.Result) > 0 {
+	if len(j.Result) > 0 {
 		m["result"] = json.RawMessage(j.Result)
 	}
-	if j.Error != nil && len(j.Error) > 0 {
+	if len(j.Error) > 0 {
 		m["error"] = json.RawMessage(j.Error)
 	}
 	if len(j.Tags) > 0 {
@@ -206,10 +210,10 @@ func ParseEnqueueRequest(data []byte) (*EnqueueRequest, error) {
 
 // FetchRequest represents the request body for fetching jobs.
 type FetchRequest struct {
-	Queues             []string `json:"queues"`
-	Count              int      `json:"count,omitempty"`
-	WorkerID           string   `json:"worker_id,omitempty"`
-	VisibilityTimeoutMs *int    `json:"visibility_timeout_ms,omitempty"`
+	Queues              []string `json:"queues"`
+	Count               int      `json:"count,omitempty"`
+	WorkerID            string   `json:"worker_id,omitempty"`
+	VisibilityTimeoutMs *int     `json:"visibility_timeout_ms,omitempty"`
 }
 
 // AckRequest represents the request body for acknowledging a job.
