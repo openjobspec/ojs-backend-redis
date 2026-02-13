@@ -55,7 +55,6 @@ func main() {
 	<-quit
 
 	log.Println("Shutting down...")
-	sched.Stop()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()

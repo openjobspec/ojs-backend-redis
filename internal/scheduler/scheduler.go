@@ -3,19 +3,27 @@ package scheduler
 import (
 	"context"
 	"log"
+	"sync"
 	"time"
-
-	redisbackend "github.com/openjobspec/ojs-backend-redis/internal/redis"
 )
+
+// SchedulerBackend defines the interface for background scheduling operations.
+type SchedulerBackend interface {
+	PromoteScheduled(ctx context.Context) error
+	PromoteRetries(ctx context.Context) error
+	RequeueStalled(ctx context.Context) error
+	FireCronJobs(ctx context.Context) error
+}
 
 // Scheduler runs background tasks for the OJS server.
 type Scheduler struct {
-	backend *redisbackend.RedisBackend
-	stop    chan struct{}
+	backend  SchedulerBackend
+	stop     chan struct{}
+	stopOnce sync.Once
 }
 
 // New creates a new Scheduler.
-func New(backend *redisbackend.RedisBackend) *Scheduler {
+func New(backend SchedulerBackend) *Scheduler {
 	return &Scheduler{
 		backend: backend,
 		stop:    make(chan struct{}),
@@ -30,9 +38,9 @@ func (s *Scheduler) Start() {
 	go s.runLoop("cron-scheduler", 10*time.Second, s.backend.FireCronJobs)
 }
 
-// Stop signals all background goroutines to stop.
+// Stop signals all background goroutines to stop. Safe to call multiple times.
 func (s *Scheduler) Stop() {
-	close(s.stop)
+	s.stopOnce.Do(func() { close(s.stop) })
 }
 
 func (s *Scheduler) runLoop(name string, interval time.Duration, fn func(context.Context) error) {
