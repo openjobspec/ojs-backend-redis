@@ -19,11 +19,9 @@ func uniqueKey(fingerprint string) string      { return fmt.Sprintf("%sunique:%s
 func cronKey(name string) string               { return fmt.Sprintf("%scron:%s", keyPrefix, name) }
 func cronNamesKey() string                     { return keyPrefix + "cron:names" }
 func workflowKey(id string) string             { return fmt.Sprintf("%sworkflow:%s", keyPrefix, id) }
-func workflowStepsKey(id string) string        { return fmt.Sprintf("%sworkflow:%s:steps", keyPrefix, id) }
 func workerKey(id string) string               { return fmt.Sprintf("%sworker:%s", keyPrefix, id) }
 func workersKey() string                       { return keyPrefix + "workers" }
 func visibilityKey(jobID string) string        { return fmt.Sprintf("%svisibility:%s", keyPrefix, jobID) }
-func jobWorkflowKey(jobID string) string       { return fmt.Sprintf("%sjob:%s:workflow", keyPrefix, jobID) }
 func cronInstanceKey(name string) string       { return fmt.Sprintf("%scron:%s:instance", keyPrefix, name) }
 func queueCompletedKey(name string) string     { return fmt.Sprintf("%squeue:%s:completed", keyPrefix, name) }
 func queueRateLimitKey(name string) string     { return fmt.Sprintf("%squeue:%s:ratelimit", keyPrefix, name) }

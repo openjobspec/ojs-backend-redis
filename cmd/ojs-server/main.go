@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"time"
 
-	redisbackend "github.com/openjobspec/ojs-backend-redis/internal/redis"
+	"github.com/openjobspec/ojs-backend-redis/internal/redis"
 	"github.com/openjobspec/ojs-backend-redis/internal/scheduler"
 	"github.com/openjobspec/ojs-backend-redis/internal/server"
 )
@@ -18,7 +18,7 @@ func main() {
 	cfg := server.LoadConfig()
 
 	// Connect to Redis
-	backend, err := redisbackend.New(cfg.RedisURL)
+	backend, err := redis.New(cfg.RedisURL)
 	if err != nil {
 		log.Fatalf("Failed to connect to Redis: %v", err)
 	}
