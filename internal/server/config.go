@@ -5,6 +5,7 @@ import "os"
 // Config holds server configuration from environment variables.
 type Config struct {
 	Port     string
+	GRPCPort string
 	RedisURL string
 }
 
@@ -12,6 +13,7 @@ type Config struct {
 func LoadConfig() Config {
 	return Config{
 		Port:     getEnv("OJS_PORT", "8080"),
+		GRPCPort: getEnv("OJS_GRPC_PORT", "9090"),
 		RedisURL: getEnv("REDIS_URL", "redis://localhost:6379"),
 	}
 }
