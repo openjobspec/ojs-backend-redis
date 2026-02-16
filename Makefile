@@ -1,4 +1,4 @@
-.PHONY: build run test lint clean conformance conformance-all docker-up docker-down
+.PHONY: build run test lint clean conformance conformance-all docker-up docker-down dev docker-dev
 
 CONFORMANCE_RUNNER = ../ojs-conformance/runner/http
 CONFORMANCE_SUITES = ../../suites
@@ -15,6 +15,9 @@ test:
 	go test ./... -race -cover
 
 lint:
+	golangci-lint run ./...
+
+lint-vet:
 	go vet ./...
 
 clean:
@@ -47,3 +50,10 @@ conformance-level-3:
 
 conformance-level-4:
 	cd $(CONFORMANCE_RUNNER) && go run . -url $(OJS_URL) -suites $(CONFORMANCE_SUITES) -level 4 -redis $(REDIS_URL)
+
+# Development with hot reload
+dev:
+	air -c .air.toml
+
+docker-dev:
+	docker compose -f docker/docker-compose.yml --profile dev up --build

@@ -1,5 +1,9 @@
 # ojs-backend-redis
 
+![CI](https://github.com/openjobspec/ojs-backend-redis/actions/workflows/ci.yml/badge.svg)
+![Conformance](https://github.com/openjobspec/ojs-backend-redis/raw/main/.github/badges/conformance.svg)
+![Security](https://github.com/openjobspec/ojs-backend-redis/actions/workflows/security.yml/badge.svg)
+
 A Redis-backed implementation of the [OpenJobSpec (OJS)](https://github.com/openjobspec) specification — a standard interface for distributed job queues and workflow orchestration. This backend gives you a production-ready job server with priority queuing, retries, scheduling, cron jobs, workflows, and dead letter handling, all powered by Redis.
 
 ## Key Features
@@ -18,7 +22,7 @@ A Redis-backed implementation of the [OpenJobSpec (OJS)](https://github.com/open
 
 ## Prerequisites
 
-- **Go** 1.22 or later
+- **Go** 1.23 or later
 - **Redis** 7.x
 - **Docker** and **Docker Compose** (optional, for containerized setup)
 
@@ -77,9 +81,11 @@ curl -X POST http://localhost:8080/ojs/v1/jobs \
   -H "Content-Type: application/json" \
   -d '{
     "type": "email.send",
-    "queue": "default",
-    "args": {"to": "user@example.com", "subject": "Hello"},
-    "priority": 10
+    "args": [{"to": "user@example.com", "subject": "Hello"}],
+    "options": {
+      "queue": "default",
+      "priority": 10
+    }
   }'
 ```
 
@@ -154,8 +160,8 @@ curl -X POST http://localhost:8080/ojs/v1/jobs/batch \
   -H "Content-Type: application/json" \
   -d '{
     "jobs": [
-      {"type": "email.send", "queue": "default", "args": {"to": "a@example.com"}},
-      {"type": "email.send", "queue": "default", "args": {"to": "b@example.com"}}
+      {"type": "email.send", "args": [{"to": "a@example.com"}], "options": {"queue": "default"}},
+      {"type": "email.send", "args": [{"to": "b@example.com"}], "options": {"queue": "default"}}
     ]
   }'
 ```
@@ -312,16 +318,14 @@ make conformance-level-0   # Individual level
 
 ## Contributing
 
-Contributions are welcome. To get started:
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup,
+testing, and pull request expectations.
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/my-feature`)
-3. Make your changes
-4. Run tests and linting: `make test && make lint`
-5. Commit with a clear message
-6. Open a pull request against `main`
+Please also review:
 
-Please ensure all tests pass and the code follows existing patterns and conventions.
+- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
+- [SECURITY.md](SECURITY.md)
+- [CHANGELOG.md](CHANGELOG.md)
 
 ## License
 
