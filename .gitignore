@@ -4,3 +4,7 @@ bin/
 
 # Redis
 dump.rdb
+
+# Environment
+.env
+.env.local
