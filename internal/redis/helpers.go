@@ -14,8 +14,8 @@ import (
 
 // Constants for magic numbers used across the backend.
 const (
-	// DefaultVisibilityTimeoutMs is the default visibility timeout in milliseconds.
-	DefaultVisibilityTimeoutMs = 30000
+	// DefaultVisibilityTimeoutMs re-exports the core default for package-internal use.
+	DefaultVisibilityTimeoutMs = core.DefaultVisibilityTimeoutMs
 	// CronVisibilityTimeoutMs is the visibility timeout for cron-fired jobs (10 min).
 	CronVisibilityTimeoutMs = 600000
 	// PriorityScoreMultiplier separates priority bands in the sorted set score.

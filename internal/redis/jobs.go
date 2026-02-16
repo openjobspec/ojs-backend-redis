@@ -180,7 +180,7 @@ func (b *RedisBackend) Fetch(ctx context.Context, queues []string, count int, wo
 	nowFormatted := core.FormatTime(now)
 	nowMs := strconv.FormatInt(now.UnixMilli(), 10)
 	visMs := strconv.Itoa(visibilityTimeoutMs)
-	defaultVisMs := strconv.Itoa(DefaultVisibilityTimeoutMs)
+	defaultVisMs := strconv.Itoa(core.DefaultVisibilityTimeoutMs)
 	var jobs []*core.Job
 
 	for _, queue := range queues {
