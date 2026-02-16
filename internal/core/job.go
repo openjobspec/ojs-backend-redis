@@ -214,6 +214,7 @@ type FetchRequest struct {
 	Count               int      `json:"count,omitempty"`
 	WorkerID            string   `json:"worker_id,omitempty"`
 	VisibilityTimeoutMs *int     `json:"visibility_timeout_ms,omitempty"`
+	Capabilities        []string `json:"capabilities,omitempty"`
 }
 
 // AckRequest represents the request body for acknowledging a job.
