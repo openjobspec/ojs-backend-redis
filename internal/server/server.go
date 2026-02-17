@@ -16,7 +16,13 @@ import (
 )
 
 // NewRouter creates and configures the HTTP router with all OJS routes.
-func NewRouter(backend core.Backend) http.Handler {
+func NewRouter(backend core.Backend, cfg Config) http.Handler {
+	return NewRouterWithRealtime(backend, cfg, nil, nil)
+}
+
+// NewRouterWithRealtime creates and configures the HTTP router with all OJS routes
+// including real-time SSE and WebSocket endpoints.
+func NewRouterWithRealtime(backend core.Backend, cfg Config, publisher core.EventPublisher, subscriber core.EventSubscriber) http.Handler {
 	r := chi.NewRouter()
 
 	// Middleware
@@ -25,6 +31,11 @@ func NewRouter(backend core.Backend) http.Handler {
 	r.Use(api.OJSHeaders)
 	r.Use(api.LimitRequestBody)
 	r.Use(api.ValidateContentType)
+
+	// Optional API key authentication
+	if cfg.APIKey != "" {
+		r.Use(api.KeyAuth(cfg.APIKey, "/metrics", "/ojs/v1/health"))
+	}
 
 	// Prometheus metrics endpoint
 	r.Handle("/metrics", promhttp.Handler())
@@ -39,6 +50,12 @@ func NewRouter(backend core.Backend) http.Handler {
 	workflowHandler := api.NewWorkflowHandler(backend)
 	batchHandler := api.NewBatchHandler(backend)
 	adminHandler := api.NewAdminHandler(backend)
+
+	// Wire event publisher into handlers
+	if publisher != nil {
+		jobHandler.SetEventPublisher(publisher)
+		workerHandler.SetEventPublisher(publisher)
+	}
 
 	// System endpoints
 	r.Get("/ojs/manifest", systemHandler.Manifest)
@@ -102,6 +119,16 @@ func NewRouter(backend core.Backend) http.Handler {
 	r.Handle("/ojs/admin", http.RedirectHandler("/ojs/admin/", http.StatusMovedPermanently))
 	r.Mount("/ojs/admin/", http.StripPrefix("/ojs/admin/", admin.Handler()))
 
+	// Real-time endpoints (SSE and WebSocket)
+	if subscriber != nil {
+		sseHandler := api.NewSSEHandler(backend, subscriber)
+		wsHandler := api.NewWSHandler(backend, subscriber)
+
+		r.Get("/ojs/v1/jobs/{id}/events", sseHandler.JobEvents)
+		r.Get("/ojs/v1/queues/{name}/events", sseHandler.QueueEvents)
+		r.Get("/ojs/v1/ws", wsHandler.Handle)
+	}
+
 	return r
 }
 
@@ -113,7 +140,7 @@ func metricsMiddleware(next http.Handler) http.Handler {
 		duration := time.Since(start).Seconds()
 		path := metricRoutePattern(r)
 		metrics.HTTPRequestsTotal.WithLabelValues(r.Method, path, fmt.Sprintf("%d", ww.Status())).Inc()
-		metrics.HTTPRequestDuration.WithLabelValues(r.Method, path).Observe(duration)
+		metrics.HTTPRequestDuration.WithLabelValues(r.Method, path, fmt.Sprintf("%d", ww.Status())).Observe(duration)
 	})
 }
 

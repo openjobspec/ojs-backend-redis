@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/openjobspec/ojs-backend-redis/internal/core"
+	"github.com/openjobspec/ojs-backend-redis/internal/metrics"
 )
 
 // BatchHandler handles batch enqueue HTTP endpoints.
@@ -59,6 +60,10 @@ func (h *BatchHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		HandleError(w, err)
 		return
+	}
+
+	for _, j := range created {
+		metrics.JobsEnqueued.WithLabelValues(j.Queue, j.Type).Inc()
 	}
 
 	WriteJSON(w, http.StatusCreated, map[string]any{

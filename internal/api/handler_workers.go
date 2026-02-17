@@ -4,18 +4,26 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/openjobspec/ojs-backend-redis/internal/core"
+	"github.com/openjobspec/ojs-backend-redis/internal/metrics"
 )
 
 // WorkerHandler handles worker-related HTTP endpoints.
 type WorkerHandler struct {
-	backend core.Backend
+	backend   core.Backend
+	publisher core.EventPublisher
 }
 
 // NewWorkerHandler creates a new WorkerHandler.
 func NewWorkerHandler(backend core.Backend) *WorkerHandler {
 	return &WorkerHandler{backend: backend}
+}
+
+// SetEventPublisher sets the event publisher for real-time notifications.
+func (h *WorkerHandler) SetEventPublisher(pub core.EventPublisher) {
+	h.publisher = pub
 }
 
 // Fetch handles POST /ojs/v1/workers/fetch
@@ -41,10 +49,24 @@ func (h *WorkerHandler) Fetch(w http.ResponseWriter, r *http.Request) {
 		visTimeout = *req.VisibilityTimeoutMs
 	}
 
+	start := time.Now()
 	jobs, err := h.backend.Fetch(r.Context(), req.Queues, count, req.WorkerID, visTimeout)
 	if err != nil {
 		HandleError(w, err)
 		return
+	}
+	metrics.FetchDuration.Observe(time.Since(start).Seconds())
+
+	for _, j := range jobs {
+		metrics.JobsFetched.WithLabelValues(j.Queue).Inc()
+		metrics.ActiveJobs.WithLabelValues(j.Queue).Inc()
+		metrics.JobsActive.Inc()
+		// Publish real-time event for state transition to active
+		if h.publisher != nil {
+			_ = h.publisher.PublishJobEvent(core.NewStateChangedEvent(
+				j.ID, j.Queue, j.Type, core.StateAvailable, core.StateActive,
+			))
+		}
 	}
 
 	if jobs == nil {
@@ -78,6 +100,18 @@ func (h *WorkerHandler) Ack(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if resp.Job != nil {
+		metrics.JobsCompleted.WithLabelValues(resp.Job.Queue, resp.Job.Type).Inc()
+		metrics.ActiveJobs.WithLabelValues(resp.Job.Queue).Dec()
+		metrics.JobsActive.Dec()
+		// Publish real-time event
+		if h.publisher != nil {
+			_ = h.publisher.PublishJobEvent(core.NewStateChangedEvent(
+				resp.JobID, resp.Job.Queue, resp.Job.Type, core.StateActive, core.StateCompleted,
+			))
+		}
+	}
+
 	WriteJSON(w, http.StatusOK, resp)
 }
 
@@ -98,6 +132,18 @@ func (h *WorkerHandler) Nack(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		HandleError(w, err)
 		return
+	}
+
+	if resp.Job != nil {
+		metrics.JobsFailed.WithLabelValues(resp.Job.Queue, resp.Job.Type).Inc()
+		metrics.ActiveJobs.WithLabelValues(resp.Job.Queue).Dec()
+		metrics.JobsActive.Dec()
+		// Publish real-time event
+		if h.publisher != nil {
+			_ = h.publisher.PublishJobEvent(core.NewStateChangedEvent(
+				resp.JobID, resp.Job.Queue, resp.Job.Type, core.StateActive, resp.State,
+			))
+		}
 	}
 
 	WriteJSON(w, http.StatusOK, resp)
@@ -122,7 +168,7 @@ func (h *WorkerHandler) Heartbeat(w http.ResponseWriter, r *http.Request) {
 		activeJobs = []string{req.JobID}
 	}
 
-	visTimeout := 30000
+	visTimeout := core.DefaultVisibilityTimeoutMs
 	if req.VisibilityTimeoutMs != nil && *req.VisibilityTimeoutMs > 0 {
 		visTimeout = *req.VisibilityTimeoutMs
 	}

@@ -10,16 +10,23 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/openjobspec/ojs-backend-redis/internal/core"
+	"github.com/openjobspec/ojs-backend-redis/internal/metrics"
 )
 
 // JobHandler handles job-related HTTP endpoints.
 type JobHandler struct {
-	backend core.Backend
+	backend   core.Backend
+	publisher core.EventPublisher
 }
 
 // NewJobHandler creates a new JobHandler.
 func NewJobHandler(backend core.Backend) *JobHandler {
 	return &JobHandler{backend: backend}
+}
+
+// SetEventPublisher sets the event publisher for real-time notifications.
+func (h *JobHandler) SetEventPublisher(pub core.EventPublisher) {
+	h.publisher = pub
 }
 
 // Create handles POST /ojs/v1/jobs
@@ -47,6 +54,15 @@ func (h *JobHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if pushErr != nil {
 		HandleError(w, pushErr)
 		return
+	}
+
+	metrics.JobsEnqueued.WithLabelValues(created.Queue, created.Type).Inc()
+
+	// Publish real-time event
+	if h.publisher != nil {
+		_ = h.publisher.PublishJobEvent(core.NewStateChangedEvent(
+			created.ID, created.Queue, created.Type, "", created.State,
+		))
 	}
 
 	w.Header().Set("Location", "/ojs/v1/jobs/"+created.ID)
@@ -78,6 +94,15 @@ func (h *JobHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		HandleError(w, err)
 		return
+	}
+
+	metrics.JobsCancelled.WithLabelValues(job.Queue, job.Type).Inc()
+
+	// Publish real-time event
+	if h.publisher != nil {
+		_ = h.publisher.PublishJobEvent(core.NewStateChangedEvent(
+			job.ID, job.Queue, job.Type, "", core.StateCancelled,
+		))
 	}
 
 	WriteJSON(w, http.StatusOK, map[string]any{"job": job})

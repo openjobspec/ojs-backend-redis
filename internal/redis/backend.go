@@ -38,6 +38,12 @@ func New(redisURL string) (*RedisBackend, error) {
 	}, nil
 }
 
+// Client returns the underlying Redis client for use by auxiliary services
+// such as the Pub/Sub broker.
+func (b *RedisBackend) Client() *redis.Client {
+	return b.client
+}
+
 // Close closes the Redis connection.
 func (b *RedisBackend) Close() error {
 	return b.client.Close()

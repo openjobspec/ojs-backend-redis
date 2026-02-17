@@ -9,9 +9,10 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	ojsgrpc "github.com/openjobspec/ojs-backend-redis/internal/grpc"
+	"github.com/openjobspec/ojs-backend-redis/internal/core"
+	"github.com/openjobspec/ojs-backend-redis/internal/metrics"
 	"github.com/openjobspec/ojs-backend-redis/internal/redis"
 	"github.com/openjobspec/ojs-backend-redis/internal/scheduler"
 	"github.com/openjobspec/ojs-backend-redis/internal/server"
@@ -35,19 +36,26 @@ func main() {
 	}
 	slog.Info("connected to Redis", "host", redisHost)
 
+	// Initialize Prometheus server info metric
+	metrics.Init(core.OJSVersion, "redis")
+
 	// Start background scheduler
 	sched := scheduler.New(backend)
 	sched.Start()
 	defer sched.Stop()
 
-	// Create HTTP server
-	router := server.NewRouter(backend)
+	// Initialize real-time Pub/Sub broker
+	broker := redis.NewPubSubBroker(backend.Client())
+	defer broker.Close()
+
+	// Create HTTP server with real-time support
+	router := server.NewRouterWithRealtime(backend, cfg, broker, broker)
 	srv := &http.Server{
 		Addr:         ":" + cfg.Port,
 		Handler:      router,
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 30 * time.Second,
-		IdleTimeout:  120 * time.Second,
+		ReadTimeout:  cfg.ReadTimeout,
+		WriteTimeout: cfg.WriteTimeout,
+		IdleTimeout:  cfg.IdleTimeout,
 	}
 
 	// Start HTTP server
@@ -83,7 +91,7 @@ func main() {
 
 	slog.Info("shutting down...")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
 	defer cancel()
 
 	grpcServer.GracefulStop()

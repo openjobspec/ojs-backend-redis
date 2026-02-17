@@ -96,7 +96,7 @@ func (b *testBackend) SetWorkerState(ctx context.Context, workerID string, state
 func (b *testBackend) Close() error { return nil }
 
 func TestNewRouter_SystemAndAdminRoutes(t *testing.T) {
-	router := NewRouter(&testBackend{})
+	router := NewRouter(&testBackend{}, Config{})
 
 	tests := []struct {
 		method string
@@ -141,7 +141,7 @@ func TestMetricsMiddleware_PreservesHandlerResponse(t *testing.T) {
 }
 
 func TestMetricsMiddleware_UsesRoutePatternLabel(t *testing.T) {
-	router := NewRouter(&testBackend{})
+	router := NewRouter(&testBackend{}, Config{})
 
 	templatePath := "/ojs/v1/jobs/{id}"
 	concretePath := "/ojs/v1/jobs/job-123"
