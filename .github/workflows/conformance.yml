@@ -45,7 +45,7 @@ jobs:
       - name: Start server
         working-directory: ojs-backend-redis
         run: |
-          REDIS_URL=redis://localhost:6379 ./bin/ojs-server &
+          OJS_ALLOW_INSECURE_NO_AUTH=true REDIS_URL=redis://localhost:6379 ./bin/ojs-server &
           sleep 2
           curl -sf http://localhost:8080/ojs/v1/health
 
