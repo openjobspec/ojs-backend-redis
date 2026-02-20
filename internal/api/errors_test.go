@@ -423,12 +423,12 @@ func TestHandleError_WithGenericError(t *testing.T) {
 		{
 			name:    "plain error wraps as internal_error",
 			err:     errors.New("something broke"),
-			wantMsg: "something broke",
+			wantMsg: "an internal error occurred",
 		},
 		{
 			name:    "formatted error wraps as internal_error",
 			err:     errors.New("connection refused: dial tcp 127.0.0.1:6379"),
-			wantMsg: "connection refused: dial tcp 127.0.0.1:6379",
+			wantMsg: "an internal error occurred",
 		},
 	}
 
