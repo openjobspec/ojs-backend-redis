@@ -22,7 +22,7 @@ jobs:
       - name: Lint
         uses: golangci/golangci-lint-action@55c2c1448f86e01eaae002a5a3a9624417608d84 # v6
         with:
-          version: latest
+          version: v1.64.8
 
   test:
     runs-on: ubuntu-latest
@@ -52,7 +52,7 @@ jobs:
         run: |
           COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print substr($3, 1, length($3)-1)}')
           echo "Total coverage: ${COVERAGE}%"
-          THRESHOLD=40
+          THRESHOLD=60
           if [ "$(echo "${COVERAGE} < ${THRESHOLD}" | bc -l)" -eq 1 ]; then
             echo "::error::Coverage ${COVERAGE}% is below minimum threshold of ${THRESHOLD}%"
             exit 1
