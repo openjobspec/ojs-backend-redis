@@ -9,6 +9,8 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	ojsotel "github.com/openjobspec/ojs-go-backend-common/otel"
+
 	"github.com/openjobspec/ojs-backend-redis/internal/admin"
 	"github.com/openjobspec/ojs-backend-redis/internal/api"
 	"github.com/openjobspec/ojs-backend-redis/internal/core"
@@ -27,6 +29,7 @@ func NewRouterWithRealtime(backend core.Backend, cfg Config, publisher core.Even
 
 	// Middleware
 	r.Use(middleware.Recoverer)
+	r.Use(ojsotel.HTTPMiddleware)
 	r.Use(metricsMiddleware)
 	r.Use(api.OJSHeaders)
 	r.Use(api.LimitRequestBody)

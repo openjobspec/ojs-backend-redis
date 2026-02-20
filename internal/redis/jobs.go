@@ -10,11 +10,16 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
+	ojsotel "github.com/openjobspec/ojs-go-backend-common/otel"
+
 	"github.com/openjobspec/ojs-backend-redis/internal/core"
 )
 
 // Push enqueues a single job.
 func (b *RedisBackend) Push(ctx context.Context, job *core.Job) (*core.Job, error) {
+	ctx, span := ojsotel.StartJobSpan(ctx, "push", job.ID, job.Type, job.Queue)
+	defer span.End()
+
 	now := time.Now()
 
 	// Assign ID if not provided
@@ -176,6 +181,9 @@ func (b *RedisBackend) PushBatch(ctx context.Context, jobs []*core.Job) ([]*core
 
 // Fetch claims jobs from the specified queues using atomic Lua scripts.
 func (b *RedisBackend) Fetch(ctx context.Context, queues []string, count int, workerID string, visibilityTimeoutMs int) ([]*core.Job, error) {
+	ctx, span := ojsotel.StartStorageSpan(ctx, "fetch", "redis")
+	defer span.End()
+
 	now := time.Now()
 	nowFormatted := core.FormatTime(now)
 	nowMs := strconv.FormatInt(now.UnixMilli(), 10)
@@ -256,6 +264,9 @@ func (b *RedisBackend) Fetch(ctx context.Context, queues []string, count int, wo
 
 // Ack acknowledges a job as completed using an atomic Lua script.
 func (b *RedisBackend) Ack(ctx context.Context, jobID string, result []byte) (*core.AckResponse, error) {
+	ctx, span := ojsotel.StartJobSpan(ctx, "ack", jobID, "", "")
+	defer span.End()
+
 	now := core.NowFormatted()
 
 	resultStr := ""
@@ -307,6 +318,9 @@ func (b *RedisBackend) Ack(ctx context.Context, jobID string, result []byte) (*c
 // Nack reports a job failure. Retry decision logic stays in Go;
 // state transitions use atomic Lua scripts.
 func (b *RedisBackend) Nack(ctx context.Context, jobID string, jobErr *core.JobError, requeue bool) (*core.NackResponse, error) {
+	ctx, span := ojsotel.StartJobSpan(ctx, "nack", jobID, "", "")
+	defer span.End()
+
 	// Read job data for retry decision logic
 	data, err := b.client.HGetAll(ctx, jobKey(jobID)).Result()
 	if err != nil || len(data) == 0 {
