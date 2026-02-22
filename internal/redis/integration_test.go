@@ -729,3 +729,4 @@ func TestIntegration_ListWorkersSummaryAndPagination(t *testing.T) {
 		t.Fatalf("unexpected summary: %+v", summary)
 	}
 }
+
