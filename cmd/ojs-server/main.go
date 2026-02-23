@@ -19,6 +19,9 @@ import (
 	"github.com/openjobspec/ojs-backend-redis/internal/scheduler"
 	"github.com/openjobspec/ojs-backend-redis/internal/server"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/health"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
+	"google.golang.org/grpc/reflection"
 )
 
 func main() {
@@ -66,7 +69,7 @@ func main() {
 	metrics.Init(core.OJSVersion, "redis")
 
 	// Start background scheduler
-	sched := scheduler.New(backend)
+	sched := scheduler.New(backend, scheduler.DefaultConfig())
 	sched.Start()
 	defer sched.Stop()
 
@@ -96,6 +99,10 @@ func main() {
 	// Start gRPC server
 	grpcServer := grpc.NewServer()
 	ojsgrpc.Register(grpcServer, backend)
+	healthSrv := health.NewServer()
+	healthpb.RegisterHealthServer(grpcServer, healthSrv)
+	healthSrv.SetServingStatus("ojs.v1.OJSService", healthpb.HealthCheckResponse_SERVING)
+	reflection.Register(grpcServer)
 
 	go func() {
 		lis, err := net.Listen("tcp", ":"+cfg.GRPCPort)
