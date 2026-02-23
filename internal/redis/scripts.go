@@ -71,12 +71,15 @@ func init() {
 	promoteScript = redisclient.NewScript(promoteScriptSrc)
 }
 
+// luaStatus represents the status codes returned by Lua scripts.
+type luaStatus = int64
+
 // Lua script return status codes.
 const (
-	luaStatusOK       = 0
-	luaStatusNotFound = 1
-	luaStatusConflict = 2
-	luaStatusExpired  = 3
+	luaStatusOK       luaStatus = iota // 0: operation succeeded
+	luaStatusNotFound                  // 1: job or resource not found
+	luaStatusConflict                  // 2: state conflict (e.g. duplicate unique job)
+	luaStatusExpired                   // 3: job visibility timeout expired
 )
 
 // parseLuaResult extracts the status code and data from a Lua script result.
