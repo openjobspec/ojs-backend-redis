@@ -67,7 +67,10 @@ func (b *RedisBackend) Push(ctx context.Context, job *core.Job) (*core.Job, erro
 		} else {
 			_, data := parseLuaResult(res)
 			if len(data) > 0 {
-				action, _ := data[0].(string)
+				action, ok := data[0].(string)
+				if !ok {
+					slog.Error("push: unexpected type in unique check result", "job_id", job.ID, "value", data[0])
+				}
 				switch action {
 				case "reject":
 					existingID := ""
@@ -168,6 +171,16 @@ func (b *RedisBackend) Push(ctx context.Context, job *core.Job) (*core.Job, erro
 
 // PushBatch enqueues multiple jobs, delegating to Push for full feature parity.
 func (b *RedisBackend) PushBatch(ctx context.Context, jobs []*core.Job) ([]*core.Job, error) {
+	// Pre-validate all jobs before any writes to avoid partial batch failures
+	for _, job := range jobs {
+		if err := core.ValidateEnqueueRequest(&core.EnqueueRequest{
+			Type: job.Type,
+			Args: job.Args,
+		}); err != nil {
+			return nil, err
+		}
+	}
+
 	var results []*core.Job
 	for _, job := range jobs {
 		created, err := b.Push(ctx, job)
@@ -303,8 +316,11 @@ func (b *RedisBackend) Ack(ctx context.Context, jobID string, result []byte) (*c
 		slog.Error("ack: error advancing workflow", "job_id", jobID, "error", err)
 	}
 
-	// Fetch the full updated job for the response
-	job, _ := b.Info(ctx, jobID)
+	// Fetch the full updated job for the response (best-effort; state already committed by Lua)
+	job, infoErr := b.Info(ctx, jobID)
+	if infoErr != nil {
+		slog.Warn("ack: failed to fetch job after completion", "job_id", jobID, "error", infoErr)
+	}
 
 	return &core.AckResponse{
 		Acknowledged: true,
@@ -372,7 +388,10 @@ func (b *RedisBackend) Nack(ctx context.Context, jobID string, jobErr *core.JobE
 			)
 		}
 
-		job, _ := b.Info(ctx, jobID)
+		job, infoErr := b.Info(ctx, jobID)
+		if infoErr != nil {
+			slog.Warn("nack-requeue: failed to fetch job after requeue", "job_id", jobID, "error", infoErr)
+		}
 		return &core.NackResponse{
 			JobID:       jobID,
 			State:       core.StateAvailable,
@@ -492,7 +511,10 @@ func (b *RedisBackend) Nack(ctx context.Context, jobID string, jobErr *core.JobE
 			slog.Error("nack: error advancing workflow for discarded job", "job_id", jobID, "error", err)
 		}
 
-		job, _ := b.Info(ctx, jobID)
+		job, infoErr := b.Info(ctx, jobID)
+		if infoErr != nil {
+			slog.Warn("nack-discard: failed to fetch job after discard", "job_id", jobID, "error", infoErr)
+		}
 		return &core.NackResponse{
 			JobID:       jobID,
 			State:       core.StateDiscarded,
@@ -530,7 +552,10 @@ func (b *RedisBackend) Nack(ctx context.Context, jobID string, jobErr *core.JobE
 		return nil, fmt.Errorf("retry job: unexpected status %d", status)
 	}
 
-	retryJob, _ := b.Info(ctx, jobID)
+	retryJob, infoErr := b.Info(ctx, jobID)
+	if infoErr != nil {
+		slog.Warn("nack-retry: failed to fetch job after retry scheduling", "job_id", jobID, "error", infoErr)
+	}
 	return &core.NackResponse{
 		JobID:         jobID,
 		State:         core.StateRetryable,

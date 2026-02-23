@@ -1,4 +1,29 @@
 -- promote.lua: Atomic batch promotion from sorted set
+--
+-- Promotes all due jobs from a time-based sorted set (scheduled or retry)
+-- to their respective available queues. Called periodically by the scheduler
+-- goroutine. Handles orphan entries (jobs whose hash was deleted) by
+-- cleaning them from the source set without error.
+--
+-- State transitions: scheduled → available, retryable → available
+--
+-- Pre-conditions:
+--   - Source sorted set contains job IDs scored by due-time in milliseconds
+--   - Job hashes exist for non-orphan entries with "queue" and "priority"
+--
+-- Post-conditions:
+--   - All jobs with score <= now_ms moved to their queue's available ZSET
+--   - Job state set to "available", enqueued_at updated
+--   - Orphan entries (missing job hash) removed from source set
+--   - Returns count of successfully promoted jobs
+--
+-- Atomicity: Entire batch promotion runs in one Lua execution. No job can
+-- be fetched mid-promotion, and no concurrent promote can process the same
+-- entries (ZRANGEBYSCORE + ZREM are sequential within the script).
+--
+-- Priority scoring: score = (100 - priority) * 1e15 + now_ms
+-- Preserves original priority when re-entering the available queue.
+--
 -- KEYS[1] = source sorted set key (e.g. ojs:scheduled or ojs:retry)
 -- ARGV[1] = now_ms (entries with score <= now_ms are due)
 -- ARGV[2] = now_formatted (for enqueued_at timestamp)

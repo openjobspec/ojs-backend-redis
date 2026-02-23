@@ -1,4 +1,37 @@
 -- advance_workflow.lua: Atomic counter increment + state check
+--
+-- Core workflow state machine. Called when a job that belongs to a workflow
+-- completes or fails. Atomically increments the appropriate counter
+-- (completed or failed), then determines the next action based on
+-- workflow type (chain, group, or batch) and current progress.
+--
+-- Workflow types and behaviors:
+--   chain: Sequential execution. Stops on first failure (fail-fast).
+--          Returns "chain_next" with next step index on success.
+--   group: Parallel execution. Waits for all jobs to finish.
+--          Returns "completed" or "failed" when all done.
+--   batch: Like group, but fires callback jobs on completion.
+--          Returns "batch_completed" or "batch_failed" with failed_count.
+--
+-- State transitions:
+--   running → running     (more steps remain)
+--   running → completed   (all steps succeeded)
+--   running → failed      (chain failure or group/batch with failures)
+--
+-- Pre-conditions:
+--   - Workflow hash exists (ojs:workflow:<id>) with type, total, completed, failed
+--   - Workflow state = "running"
+--
+-- Post-conditions:
+--   - Completed or failed counter incremented
+--   - Step result stored in ojs:workflow:<id>:results hash (for chain passing)
+--   - If terminal: workflow state and completed_at updated
+--   - Return value tells caller what action to take (enqueue next, fire callbacks, etc.)
+--
+-- Atomicity: Counter increment + completion detection are atomic. Prevents
+-- race where two concurrent job completions both think they're the last one.
+-- This is the critical invariant for workflow correctness.
+--
 -- ARGV[1] = workflowID
 -- ARGV[2] = failed_flag ("1" if failed, "0" if success)
 -- ARGV[3] = step_idx (string, the index of the completed step)

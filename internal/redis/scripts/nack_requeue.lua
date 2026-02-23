@@ -1,4 +1,27 @@
 -- nack_requeue.lua: Atomic requeue path
+--
+-- Requeues an active job back to the available queue without incrementing
+-- the attempt counter. Used when a worker cannot process the job but the
+-- failure is transient (e.g., resource contention, graceful shutdown).
+-- Clears worker assignment and recomputes priority-based score.
+--
+-- State transition: active → available
+--
+-- Pre-conditions:
+--   - Job hash exists with state = "active"
+--   - Job is in queue's active set
+--
+-- Post-conditions:
+--   - Job state = "available", started_at and worker_id cleared
+--   - Removed from active set, visibility key deleted
+--   - Added to available ZSET with priority-based score
+--
+-- Atomicity: State transition + active set removal + available set insertion
+-- are atomic. No window for the job to be "lost" between sets.
+--
+-- Priority scoring: score = (100 - priority) * 1e15 + now_ms
+-- Lower score = higher priority; ties broken by requeue time (FIFO).
+--
 -- ARGV[1] = jobID
 -- ARGV[2] = enqueued_at
 -- ARGV[3] = now_ms (for score computation)

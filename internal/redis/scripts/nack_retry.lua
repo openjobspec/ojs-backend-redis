@@ -1,4 +1,27 @@
 -- nack_retry.lua: Atomic retry path
+--
+-- Schedules a failed job for retry. Transitions to "retryable" state,
+-- stores the error and full error history, increments the attempt counter,
+-- and adds the job to the retry sorted set with a score representing the
+-- next attempt time (computed by the caller using backoff strategy).
+-- The promote.lua script later moves due retries back to available.
+--
+-- State transition: active → retryable
+--
+-- Pre-conditions:
+--   - Job hash exists with state = "active"
+--   - Caller has computed retry delay and next_attempt_at_ms
+--   - Retries remaining (not exhausted — nack_discard handles that case)
+--
+-- Post-conditions:
+--   - Job state = "retryable", attempt incremented, retry_delay_ms stored
+--   - Error and error_history stored on job hash
+--   - Removed from active set, visibility key deleted
+--   - Added to ojs:retry ZSET with score = next_attempt_at_ms
+--
+-- Atomicity: Error recording + state change + retry scheduling are atomic.
+-- Prevents duplicate retry entries or lost error history.
+--
 -- ARGV[1] = jobID
 -- ARGV[2] = new_attempt (string)
 -- ARGV[3] = error_json (empty string if none)

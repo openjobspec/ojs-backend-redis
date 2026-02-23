@@ -1,4 +1,37 @@
 -- unique_check.lua: Atomic unique job dedup
+--
+-- Enforces job uniqueness by fingerprint. Before a new job is enqueued,
+-- this script checks if an existing job with the same fingerprint is in a
+-- "relevant" state. The relevance check and conflict resolution happen
+-- atomically to prevent race conditions where two identical jobs could
+-- both pass the uniqueness check.
+--
+-- Unique key: ojs:unique:<fingerprint> → job_id (with TTL)
+-- The TTL controls how long the uniqueness constraint is enforced.
+--
+-- Conflict resolution policies:
+--   reject:  Return error, don't enqueue (caller returns 409 Conflict)
+--   ignore:  Silently return existing job ID (idempotent enqueue)
+--   replace: Update unique key to new job, caller cancels existing job
+--
+-- State relevance:
+--   Default: any non-terminal state (not completed/discarded/cancelled)
+--   Custom:  caller provides JSON array of states to check against
+--
+-- Pre-conditions:
+--   - Fingerprint is a deterministic hash of job type + args + queue
+--
+-- Post-conditions (proceed):
+--   - Unique key set with TTL, new job can be enqueued
+-- Post-conditions (reject/ignore):
+--   - No changes to unique key, existing job returned
+-- Post-conditions (replace):
+--   - Unique key updated to new job ID, existing job ID returned for cancellation
+--
+-- Atomicity: GET + state check + SET are atomic. Two concurrent enqueues
+-- with the same fingerprint cannot both get "proceed" — one will always
+-- see the other's unique key.
+--
 -- ARGV[1] = fingerprint
 -- ARGV[2] = new_job_id
 -- ARGV[3] = ttl_seconds

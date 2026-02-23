@@ -1,4 +1,26 @@
 -- ack.lua: Atomic read-validate-complete
+--
+-- Acknowledges successful job completion. Validates the job is currently in
+-- "active" state, transitions to "completed", clears error fields, removes
+-- from the active set, deletes the visibility timeout key, and increments
+-- the queue's completion counter — all atomically.
+--
+-- State transition: active → completed
+--
+-- Pre-conditions:
+--   - Job hash exists with state = "active"
+--   - Job is in queue's active set (ojs:queue:<q>:active)
+--   - Visibility timeout key exists (ojs:visibility:<id>)
+--
+-- Post-conditions:
+--   - Job state = "completed", completed_at set, result stored (if provided)
+--   - Error field cleared (HDEL)
+--   - Removed from active set, visibility key deleted
+--   - Queue completed counter incremented (ojs:queue:<q>:completed)
+--
+-- Atomicity: Prevents double-ack or concurrent state modification. The state
+-- check and update happen in a single Lua execution — no interleaving possible.
+--
 -- ARGV[1] = jobID
 -- ARGV[2] = completed_at
 -- ARGV[3] = result (JSON string, empty string if none)

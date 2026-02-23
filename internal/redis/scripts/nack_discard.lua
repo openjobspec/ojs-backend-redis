@@ -1,4 +1,26 @@
 -- nack_discard.lua: Atomic discard path
+--
+-- Permanently marks a job as discarded after all retries are exhausted.
+-- Records the final error and full error history. Optionally routes the
+-- job to the dead letter queue for manual inspection/retry (controlled
+-- by the on_exhaustion policy from the job's retry configuration).
+--
+-- State transition: active → discarded
+--
+-- Pre-conditions:
+--   - Job hash exists with state = "active"
+--   - Caller has determined max retries are exhausted
+--
+-- Post-conditions:
+--   - Job state = "discarded", completed_at set, attempt updated
+--   - Error and error_history stored on job hash
+--   - Removed from active set, visibility key deleted
+--   - If on_exhaustion = "dead_letter": job added to ojs:dead ZSET
+--
+-- Atomicity: Error recording + state transition + dead letter routing
+-- happen in one Lua execution. Prevents partial updates where error is
+-- stored but state isn't transitioned.
+--
 -- ARGV[1] = jobID
 -- ARGV[2] = new_attempt (string)
 -- ARGV[3] = error_json (empty string if none)

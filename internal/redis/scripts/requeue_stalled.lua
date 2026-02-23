@@ -1,4 +1,29 @@
 -- requeue_stalled.lua: Atomic visibility check + requeue (per job)
+--
+-- Detects and recovers stalled jobs whose worker has crashed or become
+-- unresponsive. Checks if the job's visibility timeout has expired (the
+-- deadline stored in ojs:visibility:<id>), and if so, requeues the job
+-- back to available for another worker to pick up. Called by the stalled
+-- job reaper goroutine scanning the active set.
+--
+-- State transition: active → available (only if visibility expired)
+--
+-- Pre-conditions:
+--   - Job is in the active set for its queue
+--   - Visibility key (ojs:visibility:<id>) contains deadline in Unix ms
+--   - now_ms > deadline indicates the worker has stalled
+--
+-- Post-conditions (requeued):
+--   - Job state = "available", started_at and worker_id cleared
+--   - Removed from active set, visibility key deleted
+--   - Added to available ZSET with priority-based score
+--
+-- Post-conditions (not stalled):
+--   - No changes — job continues processing normally
+--
+-- Atomicity: Visibility check + state validation + requeue are atomic.
+-- Prevents race where worker completes just as reaper tries to requeue.
+--
 -- ARGV[1] = jobID
 -- ARGV[2] = queue
 -- ARGV[3] = now_formatted

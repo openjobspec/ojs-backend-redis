@@ -1,4 +1,25 @@
 -- retry_dead_letter.lua: Atomic DLQ retry
+--
+-- Resurrects a job from the dead letter queue back into the available queue.
+-- Resets the attempt counter to 0, clears all error-related fields and
+-- completion timestamp, giving the job a fresh start. Typically triggered
+-- by an admin action via the Admin API or CLI.
+--
+-- State transition: discarded → available
+--
+-- Pre-conditions:
+--   - Job ID exists in the dead letter sorted set (ojs:dead)
+--   - Job hash exists with "queue" and "priority" fields
+--
+-- Post-conditions:
+--   - Job state = "available", attempt reset to 0, enqueued_at updated
+--   - Error, error_history, completed_at, retry_delay_ms fields cleared
+--   - Removed from dead letter ZSET
+--   - Added to queue's available ZSET with priority-based score
+--
+-- Atomicity: DLQ removal + state reset + available queue insertion are
+-- atomic. Prevents double-retry of the same dead letter job.
+--
 -- ARGV[1] = jobID
 -- ARGV[2] = enqueued_at
 -- ARGV[3] = now_ms (for available queue score)

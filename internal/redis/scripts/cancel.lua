@@ -1,4 +1,25 @@
 -- cancel.lua: Atomic read-validate-cancel
+--
+-- Cancels a job from any non-terminal state. Reads the full job hash to
+-- determine current state and queue, then atomically transitions to
+-- "cancelled" and removes the job from all possible queue sets (available,
+-- active, scheduled, retry) to prevent it from being processed further.
+--
+-- State transition: scheduled|available|pending|active|retryable → cancelled
+-- Rejected states: completed, discarded, cancelled (returns conflict)
+--
+-- Pre-conditions:
+--   - Job hash exists with a non-terminal state
+--
+-- Post-conditions:
+--   - Job state = "cancelled", cancelled_at set
+--   - Job removed from: available ZSET, active SET, scheduled ZSET, retry ZSET
+--   - Visibility timeout key deleted (if was active)
+--
+-- Atomicity: Full hash read + state check + multi-set removal happen in one
+-- Lua execution. No window for a worker to fetch a job between cancel check
+-- and queue removal.
+--
 -- ARGV[1] = jobID
 -- ARGV[2] = cancelled_at
 -- Returns: {status, queue} or {status, current_state}

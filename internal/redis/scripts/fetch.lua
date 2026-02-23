@@ -1,4 +1,32 @@
 -- fetch.lua: Atomic pop + expiry check + state transition
+--
+-- Dequeues the highest-priority job from the given queue's available sorted
+-- set, validates it hasn't expired, and transitions it to active state in a
+-- single atomic operation. Uses ZPOPMIN for contention-free dequeueing — only
+-- one worker can ever receive a given job.
+--
+-- State transition: available → active  (or available → discarded if expired)
+--
+-- Pre-conditions:
+--   - Queue's available sorted set exists and contains scored job IDs
+--   - Job hash (ojs:job:<id>) exists with at least "state" and "queue" fields
+--
+-- Post-conditions (success):
+--   - Job state = "active", started_at set, worker_id set
+--   - Job added to queue's active set (ojs:queue:<q>:active)
+--   - Visibility timeout key set (ojs:visibility:<id>) with deadline in ms
+--   - Job removed from available sorted set (done by ZPOPMIN)
+--
+-- Post-conditions (expired):
+--   - Job state = "discarded", removed from available set
+--
+-- Atomicity: Single ZPOPMIN ensures exactly-once delivery. All subsequent
+-- state mutations happen within the same Lua execution context, so no other
+-- command can interleave between pop and state update.
+--
+-- Priority scoring: score = (100 - priority) * 1e15 + enqueue_time_ms
+-- Lower score = higher priority; ties broken by enqueue order (FIFO).
+--
 -- ARGV[1] = queue name
 -- ARGV[2] = now_formatted (RFC3339 for started_at)
 -- ARGV[3] = worker_id
