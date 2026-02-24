@@ -36,7 +36,7 @@ func (m *mockBackend) FireCronJobs(ctx context.Context) error {
 
 func TestScheduler_StartStop(t *testing.T) {
 	m := &mockBackend{}
-	s := New(m)
+	s := New(m, DefaultConfig())
 
 	s.Start()
 	// Allow some ticks to fire
@@ -53,7 +53,7 @@ func TestScheduler_StartStop(t *testing.T) {
 
 func TestScheduler_StopIdempotent(t *testing.T) {
 	m := &mockBackend{}
-	s := New(m)
+	s := New(m, DefaultConfig())
 	s.Start()
 
 	// Calling Stop multiple times should not panic
@@ -64,7 +64,7 @@ func TestScheduler_StopIdempotent(t *testing.T) {
 
 func TestScheduler_AllLoopsRun(t *testing.T) {
 	m := &mockBackend{}
-	s := New(m)
+	s := New(m, DefaultConfig())
 	s.Start()
 
 	// Wait long enough for all loops to fire at least once
@@ -87,7 +87,7 @@ func TestScheduler_AllLoopsRun(t *testing.T) {
 
 func TestScheduler_StopHaltsExecution(t *testing.T) {
 	m := &mockBackend{}
-	s := New(m)
+	s := New(m, DefaultConfig())
 	s.Start()
 
 	// Let some ticks fire
@@ -108,7 +108,7 @@ func TestScheduler_StopHaltsExecution(t *testing.T) {
 
 func TestScheduler_ErrorsDoNotStopLoop(t *testing.T) {
 	m := &mockBackend{err: context.DeadlineExceeded}
-	s := New(m)
+	s := New(m, DefaultConfig())
 	s.Start()
 
 	// Even with errors, the loop should keep running
@@ -122,7 +122,7 @@ func TestScheduler_ErrorsDoNotStopLoop(t *testing.T) {
 
 func TestScheduler_ConcurrentStartStop(t *testing.T) {
 	m := &mockBackend{}
-	s := New(m)
+	s := New(m, DefaultConfig())
 
 	var wg sync.WaitGroup
 	// Start, then concurrently call Stop from multiple goroutines
