@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -9,6 +10,9 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	"github.com/openjobspec/ojs-go-backend-common/chaos"
+	commonapi "github.com/openjobspec/ojs-go-backend-common/api"
+	"github.com/openjobspec/ojs-go-backend-common/debugger"
 	ojsotel "github.com/openjobspec/ojs-go-backend-common/otel"
 
 	"github.com/openjobspec/ojs-backend-redis/internal/admin"
@@ -40,6 +44,13 @@ func NewRouterWithRealtime(backend core.Backend, cfg Config, publisher core.Even
 		r.Use(api.KeyAuth(cfg.APIKey, "/metrics", "/ojs/v1/health"))
 	}
 
+	// Optional chaos engineering middleware (for testing only)
+	if cfg.ChaosEnabled {
+		chaosEngine := chaos.NewEngine(chaos.Config{Enabled: true})
+		r.Use(chaosEngine.HTTPMiddleware)
+		slog.Warn("chaos engineering middleware is enabled — DO NOT use in production")
+	}
+
 	// Prometheus metrics endpoint
 	r.Handle("/metrics", promhttp.Handler())
 
@@ -53,6 +64,10 @@ func NewRouterWithRealtime(backend core.Backend, cfg Config, publisher core.Even
 	workflowHandler := api.NewWorkflowHandler(backend)
 	batchHandler := api.NewBatchHandler(backend)
 	adminHandler := api.NewAdminHandler(backend)
+
+	// Optional debug handler (time-travel debugging)
+	debugStore := debugger.NewMemoryStore(10000)
+	debugHandler := commonapi.NewDebugHandler(debugStore, cfg.ChaosEnabled)
 
 	// Wire event publisher into handlers
 	if publisher != nil {
@@ -121,6 +136,12 @@ func NewRouterWithRealtime(backend core.Backend, cfg Config, publisher core.Even
 	// Admin UI (embedded SPA)
 	r.Handle("/ojs/admin", http.RedirectHandler("/ojs/admin/", http.StatusMovedPermanently))
 	r.Mount("/ojs/admin/", http.StripPrefix("/ojs/admin/", admin.Handler()))
+
+	// Debug endpoints (time-travel debugging)
+	r.Get("/ojs/v1/debug/status", debugHandler.Status)
+	r.Get("/ojs/v1/debug/jobs/{id}/traces", debugHandler.GetTrace)
+	r.Get("/ojs/v1/debug/jobs/{id}/traces/{attempt}", debugHandler.GetTraceAttempt)
+	r.Get("/ojs/v1/debug/failures", debugHandler.ListFailures)
 
 	// Real-time endpoints (SSE and WebSocket)
 	if subscriber != nil {
