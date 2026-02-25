@@ -50,3 +50,4 @@ func (m *redisJobMetrics) ActiveJobDec(queue string) {
 func (m *redisJobMetrics) FetchDuration(seconds float64) {
 	metrics.FetchDuration.Observe(seconds)
 }
+
