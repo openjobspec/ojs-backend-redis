@@ -10,9 +10,11 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	"github.com/openjobspec/ojs-go-backend-common/audit"
 	"github.com/openjobspec/ojs-go-backend-common/chaos"
 	commonapi "github.com/openjobspec/ojs-go-backend-common/api"
 	"github.com/openjobspec/ojs-go-backend-common/debugger"
+	commonmw "github.com/openjobspec/ojs-go-backend-common/middleware"
 	ojsotel "github.com/openjobspec/ojs-go-backend-common/otel"
 
 	"github.com/openjobspec/ojs-backend-redis/internal/admin"
@@ -39,9 +41,26 @@ func NewRouterWithRealtime(backend core.Backend, cfg Config, publisher core.Even
 	r.Use(api.LimitRequestBody)
 	r.Use(api.ValidateContentType)
 
-	// Optional API key authentication
-	if cfg.APIKey != "" {
-		r.Use(api.KeyAuth(cfg.APIKey, "/metrics", "/ojs/v1/health"))
+	// Authentication: OIDC JWT takes precedence over API key
+	skipPaths := []string{"/metrics", "/ojs/v1/health", "/healthz", "/readyz"}
+	if cfg.OIDCIssuer != "" {
+		r.Use(commonmw.JWTAuth(commonmw.OIDCConfig{
+			IssuerURL: cfg.OIDCIssuer,
+			Audience:  cfg.OIDCClientID,
+			SkipPaths: skipPaths,
+		}))
+	} else if cfg.APIKey != "" {
+		r.Use(api.KeyAuth(cfg.APIKey, skipPaths...))
+	}
+
+	// Optional audit logging
+	if cfg.AuditEnabled {
+		auditor := audit.New(audit.Config{
+			Enabled:  true,
+			SinkType: cfg.AuditSink,
+			FilePath: cfg.AuditFilePath,
+		})
+		r.Use(auditor.Middleware())
 	}
 
 	// Optional chaos engineering middleware (for testing only)
@@ -64,6 +83,7 @@ func NewRouterWithRealtime(backend core.Backend, cfg Config, publisher core.Even
 	workflowHandler := api.NewWorkflowHandler(backend)
 	batchHandler := api.NewBatchHandler(backend)
 	adminHandler := api.NewAdminHandler(backend)
+	historyHandler := api.NewHistoryHandler(backend)
 
 	// Optional debug handler (time-travel debugging)
 	debugStore := debugger.NewMemoryStore(10000)
@@ -83,6 +103,11 @@ func NewRouterWithRealtime(backend core.Backend, cfg Config, publisher core.Even
 	r.Post("/ojs/v1/jobs", jobHandler.Create)
 	r.Get("/ojs/v1/jobs/{id}", jobHandler.Get)
 	r.Delete("/ojs/v1/jobs/{id}", jobHandler.Cancel)
+
+	// Job history endpoints
+	r.Get("/ojs/v1/jobs/{id}/history", historyHandler.GetJobHistory)
+	r.Get("/ojs/v1/jobs/{id}/lineage", historyHandler.GetJobLineage)
+	r.Delete("/ojs/v1/jobs/{id}/history", historyHandler.DeleteJobHistory)
 
 	// Batch enqueue
 	r.Post("/ojs/v1/jobs/batch", batchHandler.Create)

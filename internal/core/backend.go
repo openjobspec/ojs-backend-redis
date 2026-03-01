@@ -95,3 +95,37 @@ var (
 	NewValidationError     = common.NewValidationError
 	NewInternalError       = common.NewInternalError
 )
+
+// History and purge type aliases.
+type HistoryManager = common.HistoryManager
+type HistoryEvent = common.HistoryEvent
+type HistoryActor = common.HistoryActor
+type HistoryPage = common.HistoryPage
+type HistoryQuery = common.HistoryQuery
+type JobLineage = common.JobLineage
+type PurgeManager = common.PurgeManager
+type PurgeFilters = common.PurgeFilters
+type PurgeResult = common.PurgeResult
+
+// Checkpoint and schema type aliases.
+type Checkpoint = common.Checkpoint
+type CheckpointManager = common.CheckpointManager
+type SaveCheckpointRequest = common.SaveCheckpointRequest
+type SchemaRegistry = common.SchemaRegistry
+type Schema = common.Schema
+type SchemaVersion = common.SchemaVersion
+type ValidationResult = common.ValidationResult
+
+var (
+	NewHistoryEvent           = common.NewHistoryEvent
+	SystemActor               = common.SystemActor
+	WorkerActor               = common.WorkerActor
+	ClientActor               = common.ClientActor
+	HistoryEventJobCreated    = common.HistoryEventJobCreated
+	HistoryEventStateChanged  = common.HistoryEventStateChanged
+	HistoryEventAttemptStarted = common.HistoryEventAttemptStarted
+	HistoryEventAttemptCompleted = common.HistoryEventAttemptCompleted
+	HistoryEventAttemptFailed   = common.HistoryEventAttemptFailed
+	HistoryEventCancelled       = common.HistoryEventCancelled
+	HistoryEventDiscarded       = common.HistoryEventDiscarded
+)

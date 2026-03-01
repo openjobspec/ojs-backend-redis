@@ -166,6 +166,15 @@ func (b *RedisBackend) Push(ctx context.Context, job *core.Job) (*core.Job, erro
 		return nil, fmt.Errorf("enqueue job: %w", err)
 	}
 
+	// Record history event
+	b.RecordEvent(ctx, core.NewHistoryEvent(job.ID, core.HistoryEventJobCreated,
+		core.ClientActor(""), map[string]any{"queue": job.Queue, "type": job.Type}))
+
+	// Track parent-child lineage
+	if job.ParentID != "" {
+		b.client.SAdd(ctx, childrenKeyPrefix+job.ParentID, job.ID)
+	}
+
 	return job, nil
 }
 
@@ -321,6 +330,13 @@ func (b *RedisBackend) Ack(ctx context.Context, jobID string, result []byte) (*c
 	if infoErr != nil {
 		slog.Warn("ack: failed to fetch job after completion", "job_id", jobID, "error", infoErr)
 	}
+
+	// Delete checkpoint on completion
+	b.DeleteCheckpoint(ctx, jobID)
+
+	// Record history
+	b.RecordEvent(ctx, core.NewHistoryEvent(jobID, core.HistoryEventAttemptCompleted,
+		core.SystemActor(), map[string]any{"state": core.StateCompleted}))
 
 	return &core.AckResponse{
 		Acknowledged: true,
@@ -556,6 +572,16 @@ func (b *RedisBackend) Nack(ctx context.Context, jobID string, jobErr *core.JobE
 	if infoErr != nil {
 		slog.Warn("nack-retry: failed to fetch job after retry scheduling", "job_id", jobID, "error", infoErr)
 	}
+
+	errMsg := ""
+	if jobErr != nil {
+		errMsg = jobErr.Message
+	}
+	b.RecordEvent(ctx, core.NewHistoryEvent(jobID, core.HistoryEventAttemptFailed,
+		core.SystemActor(), map[string]any{
+			"attempt": newAttempt, "will_retry": true, "error": errMsg,
+		}))
+
 	return &core.NackResponse{
 		JobID:         jobID,
 		State:         core.StateRetryable,
@@ -605,6 +631,9 @@ func (b *RedisBackend) Cancel(ctx context.Context, jobID string) (*core.Job, err
 			},
 		)
 	}
+
+	b.RecordEvent(ctx, core.NewHistoryEvent(jobID, core.HistoryEventCancelled,
+		core.ClientActor(""), nil))
 
 	return b.Info(ctx, jobID)
 }
