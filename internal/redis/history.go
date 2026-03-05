@@ -150,3 +150,4 @@ func (b *RedisBackend) PurgeHistory(ctx context.Context, olderThan time.Duration
 	}
 	return deleted, nil
 }
+
