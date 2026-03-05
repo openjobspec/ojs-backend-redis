@@ -162,6 +162,9 @@ func NewRouterWithRealtime(backend core.Backend, cfg Config, publisher core.Even
 	r.Handle("/ojs/admin", http.RedirectHandler("/ojs/admin/", http.StatusMovedPermanently))
 	r.Mount("/ojs/admin/", http.StripPrefix("/ojs/admin/", admin.Handler()))
 
+	// API documentation (Swagger UI)
+	commonapi.RegisterDocsRoutes(r, api.OpenAPISpec)
+
 	// Debug endpoints (time-travel debugging)
 	r.Get("/ojs/v1/debug/status", debugHandler.Status)
 	r.Get("/ojs/v1/debug/jobs/{id}/traces", debugHandler.GetTrace)
