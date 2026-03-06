@@ -48,3 +48,4 @@ var (
 	_ func(http.ResponseWriter, *http.Request) = (*SystemHandler)(nil).Manifest
 	_ func(http.ResponseWriter, *http.Request) = (*SystemHandler)(nil).Health
 )
+
