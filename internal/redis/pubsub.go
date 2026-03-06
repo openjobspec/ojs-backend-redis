@@ -138,3 +138,4 @@ func (b *PubSubBroker) Close() error {
 	b.wg.Wait()
 	return nil
 }
+
