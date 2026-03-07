@@ -78,3 +78,4 @@ conformance-grpc-level-3:
 
 conformance-grpc-level-4:
 	cd $(CONFORMANCE_GRPC_RUNNER) && go run . -url $(GRPC_URL) -suites $(CONFORMANCE_SUITES) -level 4 -redis $(REDIS_URL)
+
