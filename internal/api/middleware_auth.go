@@ -10,3 +10,4 @@ import (
 func KeyAuth(apiKey string, skipPaths ...string) func(http.Handler) http.Handler {
 	return commonapi.KeyAuth(apiKey, skipPaths...)
 }
+
