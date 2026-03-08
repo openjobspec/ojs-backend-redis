@@ -340,7 +340,7 @@ func (b *RedisBackend) Ack(ctx context.Context, jobID string, result []byte) (*c
 
 	return &core.AckResponse{
 		Acknowledged: true,
-		JobID:        jobID,
+		ID:        jobID,
 		State:        core.StateCompleted,
 		CompletedAt:  now,
 		Job:          job,
@@ -409,7 +409,7 @@ func (b *RedisBackend) Nack(ctx context.Context, jobID string, jobErr *core.JobE
 			slog.Warn("nack-requeue: failed to fetch job after requeue", "job_id", jobID, "error", infoErr)
 		}
 		return &core.NackResponse{
-			JobID:       jobID,
+			ID:       jobID,
 			State:       core.StateAvailable,
 			Attempt:     attempt,
 			MaxAttempts: maxAttempts,
@@ -532,7 +532,7 @@ func (b *RedisBackend) Nack(ctx context.Context, jobID string, jobErr *core.JobE
 			slog.Warn("nack-discard: failed to fetch job after discard", "job_id", jobID, "error", infoErr)
 		}
 		return &core.NackResponse{
-			JobID:       jobID,
+			ID:       jobID,
 			State:       core.StateDiscarded,
 			Attempt:     newAttempt,
 			MaxAttempts: maxAttempts,
@@ -583,7 +583,7 @@ func (b *RedisBackend) Nack(ctx context.Context, jobID string, jobErr *core.JobE
 		}))
 
 	return &core.NackResponse{
-		JobID:         jobID,
+		ID:         jobID,
 		State:         core.StateRetryable,
 		Attempt:       newAttempt,
 		MaxAttempts:   maxAttempts,

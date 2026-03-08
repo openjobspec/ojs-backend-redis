@@ -24,10 +24,10 @@ func (b *testBackend) Fetch(ctx context.Context, queues []string, count int, wor
 	return []*core.Job{}, nil
 }
 func (b *testBackend) Ack(ctx context.Context, jobID string, result []byte) (*core.AckResponse, error) {
-	return &core.AckResponse{Acknowledged: true, JobID: jobID, State: core.StateCompleted}, nil
+	return &core.AckResponse{Acknowledged: true, ID: jobID, State: core.StateCompleted}, nil
 }
 func (b *testBackend) Nack(ctx context.Context, jobID string, jobErr *core.JobError, requeue bool) (*core.NackResponse, error) {
-	return &core.NackResponse{JobID: jobID, State: core.StateRetryable}, nil
+	return &core.NackResponse{ID: jobID, State: core.StateRetryable}, nil
 }
 func (b *testBackend) Info(ctx context.Context, jobID string) (*core.Job, error) {
 	return &core.Job{ID: jobID, Type: "test", State: core.StateAvailable, Queue: "default"}, nil
